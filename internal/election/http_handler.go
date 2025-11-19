@@ -2,6 +2,7 @@ package election
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	
@@ -34,8 +35,8 @@ func (h *Handler) GetCurrent(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	
-	var electionID int64
-	if _, err := response.Success, id); err != nil {
+	electionID, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
 		response.BadRequest(w, "Invalid election ID", nil)
 		return
 	}
