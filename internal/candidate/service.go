@@ -193,3 +193,311 @@ return dto, nil
 func ptrStatus(s CandidateStatus) *CandidateStatus {
 return &s
 }
+
+// AdminListCandidates returns all candidates for admin view (no status filter by default)
+func (s *Service) AdminListCandidates(
+ctx context.Context,
+electionID int64,
+search string,
+status *CandidateStatus,
+page, limit int,
+) ([]CandidateDetailDTO, Pagination, error) {
+if page <= 0 {
+page = 1
+}
+if limit <= 0 {
+limit = 20
+}
+
+filter := Filter{
+Status: status,
+Search: search,
+Limit:  limit,
+Offset: (page - 1) * limit,
+}
+
+candidates, total, err := s.repo.ListByElection(ctx, electionID, filter)
+if err != nil {
+return nil, Pagination{}, err
+}
+
+// Get stats for all candidates
+statsMap, err := s.stats.GetCandidateStats(ctx, electionID)
+if err != nil {
+statsMap = CandidateStatsMap{}
+}
+
+dtos := make([]CandidateDetailDTO, 0, len(candidates))
+for _, c := range candidates {
+stats := statsMap[c.ID]
+dtos = append(dtos, CandidateDetailDTO{
+ID:               c.ID,
+ElectionID:       c.ElectionID,
+Number:           c.Number,
+Name:             c.Name,
+PhotoURL:         c.PhotoURL,
+ShortBio:         c.ShortBio,
+LongBio:          c.LongBio,
+Tagline:          c.Tagline,
+FacultyName:      c.FacultyName,
+StudyProgramName: c.StudyProgramName,
+CohortYear:       c.CohortYear,
+Vision:           c.Vision,
+Missions:         c.Missions,
+MainPrograms:     c.MainPrograms,
+Media:            c.Media,
+SocialLinks:      c.SocialLinks,
+Status:           string(c.Status),
+Stats:            stats,
+})
+}
+
+totalPages := int64(0)
+if limit > 0 {
+totalPages = int64(math.Ceil(float64(total) / float64(limit)))
+}
+
+pag := Pagination{
+Page:       page,
+Limit:      limit,
+TotalItems: total,
+TotalPages: totalPages,
+}
+
+return dtos, pag, nil
+}
+
+// AdminCreateCandidate creates a new candidate
+func (s *Service) AdminCreateCandidate(
+ctx context.Context,
+electionID int64,
+req AdminCreateCandidateRequest,
+) (*CandidateDetailDTO, error) {
+// Check if number is already taken
+exists, err := s.repo.CheckNumberExists(ctx, electionID, req.Number, nil)
+if err != nil {
+return nil, err
+}
+if exists {
+return nil, ErrCandidateNumberTaken
+}
+
+// Create candidate entity
+candidate := &Candidate{
+ElectionID:       electionID,
+Number:           req.Number,
+Name:             req.Name,
+PhotoURL:         req.PhotoURL,
+ShortBio:         req.ShortBio,
+LongBio:          req.LongBio,
+Tagline:          req.Tagline,
+FacultyName:      req.FacultyName,
+StudyProgramName: req.StudyProgramName,
+CohortYear:       req.CohortYear,
+Vision:           req.Vision,
+Missions:         req.Missions,
+MainPrograms:     req.MainPrograms,
+Media:            req.Media,
+SocialLinks:      req.SocialLinks,
+Status:           req.Status,
+}
+
+created, err := s.repo.Create(ctx, candidate)
+if err != nil {
+return nil, err
+}
+
+// Get stats
+statsMap, _ := s.stats.GetCandidateStats(ctx, electionID)
+stats := statsMap[created.ID]
+
+return &CandidateDetailDTO{
+ID:               created.ID,
+ElectionID:       created.ElectionID,
+Number:           created.Number,
+Name:             created.Name,
+PhotoURL:         created.PhotoURL,
+ShortBio:         created.ShortBio,
+LongBio:          created.LongBio,
+Tagline:          created.Tagline,
+FacultyName:      created.FacultyName,
+StudyProgramName: created.StudyProgramName,
+CohortYear:       created.CohortYear,
+Vision:           created.Vision,
+Missions:         created.Missions,
+MainPrograms:     created.MainPrograms,
+Media:            created.Media,
+SocialLinks:      created.SocialLinks,
+Status:           string(created.Status),
+Stats:            stats,
+}, nil
+}
+
+// AdminGetCandidate returns candidate detail for admin (no status restriction)
+func (s *Service) AdminGetCandidate(
+ctx context.Context,
+electionID, candidateID int64,
+) (*CandidateDetailDTO, error) {
+c, err := s.repo.GetByID(ctx, electionID, candidateID)
+if err != nil {
+return nil, err
+}
+
+statsMap, _ := s.stats.GetCandidateStats(ctx, electionID)
+stats := statsMap[c.ID]
+
+return &CandidateDetailDTO{
+ID:               c.ID,
+ElectionID:       c.ElectionID,
+Number:           c.Number,
+Name:             c.Name,
+PhotoURL:         c.PhotoURL,
+ShortBio:         c.ShortBio,
+LongBio:          c.LongBio,
+Tagline:          c.Tagline,
+FacultyName:      c.FacultyName,
+StudyProgramName: c.StudyProgramName,
+CohortYear:       c.CohortYear,
+Vision:           c.Vision,
+Missions:         c.Missions,
+MainPrograms:     c.MainPrograms,
+Media:            c.Media,
+SocialLinks:      c.SocialLinks,
+Status:           string(c.Status),
+Stats:            stats,
+}, nil
+}
+
+// AdminUpdateCandidate updates an existing candidate
+func (s *Service) AdminUpdateCandidate(
+ctx context.Context,
+electionID, candidateID int64,
+req AdminUpdateCandidateRequest,
+) (*CandidateDetailDTO, error) {
+// Get existing candidate
+existing, err := s.repo.GetByID(ctx, electionID, candidateID)
+if err != nil {
+return nil, err
+}
+
+// Check if number is being changed and if it's already taken
+if req.Number != nil && *req.Number != existing.Number {
+exists, err := s.repo.CheckNumberExists(ctx, electionID, *req.Number, &candidateID)
+if err != nil {
+return nil, err
+}
+if exists {
+return nil, ErrCandidateNumberTaken
+}
+}
+
+// Apply updates
+if req.Number != nil {
+existing.Number = *req.Number
+}
+if req.Name != nil {
+existing.Name = *req.Name
+}
+if req.PhotoURL != nil {
+existing.PhotoURL = *req.PhotoURL
+}
+if req.ShortBio != nil {
+existing.ShortBio = *req.ShortBio
+}
+if req.LongBio != nil {
+existing.LongBio = *req.LongBio
+}
+if req.Tagline != nil {
+existing.Tagline = *req.Tagline
+}
+if req.FacultyName != nil {
+existing.FacultyName = *req.FacultyName
+}
+if req.StudyProgramName != nil {
+existing.StudyProgramName = *req.StudyProgramName
+}
+if req.CohortYear != nil {
+existing.CohortYear = req.CohortYear
+}
+if req.Vision != nil {
+existing.Vision = *req.Vision
+}
+if req.Missions != nil {
+existing.Missions = *req.Missions
+}
+if req.MainPrograms != nil {
+existing.MainPrograms = *req.MainPrograms
+}
+if req.Media != nil {
+existing.Media = *req.Media
+}
+if req.SocialLinks != nil {
+existing.SocialLinks = *req.SocialLinks
+}
+if req.Status != nil {
+existing.Status = *req.Status
+}
+
+updated, err := s.repo.Update(ctx, electionID, candidateID, existing)
+if err != nil {
+return nil, err
+}
+
+statsMap, _ := s.stats.GetCandidateStats(ctx, electionID)
+stats := statsMap[updated.ID]
+
+return &CandidateDetailDTO{
+ID:               updated.ID,
+ElectionID:       updated.ElectionID,
+Number:           updated.Number,
+Name:             updated.Name,
+PhotoURL:         updated.PhotoURL,
+ShortBio:         updated.ShortBio,
+LongBio:          updated.LongBio,
+Tagline:          updated.Tagline,
+FacultyName:      updated.FacultyName,
+StudyProgramName: updated.StudyProgramName,
+CohortYear:       updated.CohortYear,
+Vision:           updated.Vision,
+Missions:         updated.Missions,
+MainPrograms:     updated.MainPrograms,
+Media:            updated.Media,
+SocialLinks:      updated.SocialLinks,
+Status:           string(updated.Status),
+Stats:            stats,
+}, nil
+}
+
+// AdminDeleteCandidate deletes a candidate
+func (s *Service) AdminDeleteCandidate(
+ctx context.Context,
+electionID, candidateID int64,
+) error {
+return s.repo.Delete(ctx, electionID, candidateID)
+}
+
+// AdminPublishCandidate publishes a candidate
+func (s *Service) AdminPublishCandidate(
+ctx context.Context,
+electionID, candidateID int64,
+) (*CandidateDetailDTO, error) {
+err := s.repo.UpdateStatus(ctx, electionID, candidateID, CandidateStatusPublished)
+if err != nil {
+return nil, err
+}
+
+return s.AdminGetCandidate(ctx, electionID, candidateID)
+}
+
+// AdminUnpublishCandidate unpublishes a candidate
+func (s *Service) AdminUnpublishCandidate(
+ctx context.Context,
+electionID, candidateID int64,
+) (*CandidateDetailDTO, error) {
+err := s.repo.UpdateStatus(ctx, electionID, candidateID, CandidateStatusHidden)
+if err != nil {
+return nil, err
+}
+
+return s.AdminGetCandidate(ctx, electionID, candidateID)
+}
