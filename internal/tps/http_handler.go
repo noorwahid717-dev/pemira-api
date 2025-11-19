@@ -24,6 +24,28 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
+// NewTPSHandler creates a new TPS handler
+func NewTPSHandler(svc *Service) *Handler {
+	return &Handler{
+		service:  svc,
+		validate: validator.New(),
+	}
+}
+
+// MountPublic registers public TPS routes (for students)
+func (h *Handler) MountPublic(r chi.Router) {
+	r.Post("/tps/checkin/scan", h.ScanQR)
+	r.Get("/tps/checkin/status", h.StudentCheckinStatus)
+}
+
+// MountPanel registers TPS panel routes (for TPS operators)
+func (h *Handler) MountPanel(r chi.Router) {
+	r.Post("/tps/{tpsID}/checkins/{checkinID}/approve", h.ApproveCheckin)
+	r.Post("/tps/{tpsID}/checkins/{checkinID}/reject", h.PanelRejectCheckin)
+	r.Get("/tps/{tpsID}/checkins", h.PanelListCheckins)
+	r.Get("/tps/{tpsID}/summary", h.PanelGetSummary)
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	// Admin TPS Management
 	r.Route("/admin/tps", func(r chi.Router) {
@@ -37,7 +59,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	
 	// Student Check-in
 	r.Route("/tps", func(r chi.Router) {
-		r.Post("/checkin/scan", h.StudentScanQR)
+		r.Post("/checkin/scan", h.ScanQR)
 		r.Get("/checkin/status", h.StudentCheckinStatus)
 	})
 	
@@ -45,7 +67,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/tps/{tps_id}", func(r chi.Router) {
 		r.Get("/summary", h.PanelGetSummary)
 		r.Get("/checkins", h.PanelListCheckins)
-		r.Post("/checkins/{checkin_id}/approve", h.PanelApproveCheckin)
+		r.Post("/checkins/{checkin_id}/approve", h.ApproveCheckin)
 		r.Post("/checkins/{checkin_id}/reject", h.PanelRejectCheckin)
 	})
 }
