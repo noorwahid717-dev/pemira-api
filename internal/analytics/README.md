@@ -46,41 +46,57 @@ HTTP/REST layer using Gin:
 import (
     "github.com/pemira/internal/analytics"
     "github.com/jackc/pgx/v5/pgxpool"
+    "github.com/go-chi/chi/v5"
 )
 
-// Setup
+// Setup dependencies
 pool, _ := pgxpool.New(context.Background(), connString)
 repo := analytics.NewAnalyticsRepo(pool)
 service := analytics.NewService(repo)
-handler := analytics.NewHandler(service)
+responseWriter := analytics.NewStandardResponseWriter()
+handler := analytics.NewHandler(service, responseWriter)
 
-// Register routes
-r := gin.Default()
-api := r.Group("/api/v1")
-handler.RegisterRoutes(api)
+// Mount to Chi router
+r := chi.NewRouter()
+
+// Mount under /admin/elections/{electionID}/analytics
+r.Route("/admin/elections/{electionID}/analytics", func(ar chi.Router) {
+    // Add auth middleware if needed
+    // ar.Use(middleware.AuthAdminOnly)
+    
+    handler.Mount(ar)
+})
 ```
 
 ### API Endpoints
 
 **Dashboard (all charts in one call):**
 ```
-GET /api/v1/analytics/elections/{id}/dashboard
+GET /admin/elections/{electionID}/analytics/dashboard
 ```
 
-**Individual charts:**
+**Timeline charts:**
 ```
-GET /api/v1/analytics/elections/{id}/hourly-votes
-GET /api/v1/analytics/elections/{id}/hourly-by-candidate
-GET /api/v1/analytics/elections/{id}/faculty-heatmap
-GET /api/v1/analytics/elections/{id}/turnout-timeline
-GET /api/v1/analytics/elections/{id}/cohort-breakdown
-GET /api/v1/analytics/elections/{id}/peak-hours
-GET /api/v1/analytics/elections/{id}/voting-velocity
+GET /admin/elections/{electionID}/analytics/timeline/votes
+GET /admin/elections/{electionID}/analytics/timeline/candidates
+GET /admin/elections/{electionID}/analytics/timeline/turnout
+```
+
+**Heatmap & demographics:**
+```
+GET /admin/elections/{electionID}/analytics/heatmap/faculty-candidate
+GET /admin/elections/{electionID}/analytics/cohort-breakdown
+```
+
+**Performance analysis:**
+```
+GET /admin/elections/{electionID}/analytics/peak-hours
+GET /admin/elections/{electionID}/analytics/voting-velocity
 ```
 
 ### Example Response
 
-**GET /analytics/elections/1/hourly-votes**
+**GET /admin/elections/1/analytics/timeline/votes**
 ```json
 [
   {
@@ -98,7 +114,7 @@ GET /api/v1/analytics/elections/{id}/voting-velocity
 ]
 ```
 
-**GET /analytics/elections/1/dashboard**
+**GET /admin/elections/1/analytics/dashboard**
 ```json
 {
   "hourly_votes": [...],
