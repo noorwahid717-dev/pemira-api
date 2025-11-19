@@ -20,6 +20,21 @@ ListByElection(ctx context.Context, electionID int64, filter Filter) ([]Candidat
 
 // GetByID returns a single candidate by election and candidate ID
 GetByID(ctx context.Context, electionID, candidateID int64) (*Candidate, error)
+
+// Create creates a new candidate
+Create(ctx context.Context, candidate *Candidate) (*Candidate, error)
+
+// Update updates an existing candidate
+Update(ctx context.Context, electionID, candidateID int64, candidate *Candidate) (*Candidate, error)
+
+// Delete deletes a candidate
+Delete(ctx context.Context, electionID, candidateID int64) error
+
+// UpdateStatus updates candidate status
+UpdateStatus(ctx context.Context, electionID, candidateID int64, status CandidateStatus) error
+
+// CheckNumberExists checks if candidate number is already taken in an election
+CheckNumberExists(ctx context.Context, electionID int64, number int, excludeCandidateID *int64) (bool, error)
 }
 
 // Common errors

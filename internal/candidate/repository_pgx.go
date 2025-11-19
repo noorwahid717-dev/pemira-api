@@ -262,3 +262,163 @@ return nil
 }
 return json.Unmarshal(b, dest)
 }
+
+const qCreateCandidate = `
+INSERT INTO candidates (
+election_id, number, name, photo_url, short_bio, long_bio, tagline,
+faculty_name, study_program_name, cohort_year, vision, missions,
+main_programs, media, social_links, status, created_at, updated_at
+) VALUES (
+$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW()
+)
+RETURNING id, election_id, number, name, photo_url, short_bio, long_bio, tagline,
+faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
+media, social_links, status, created_at, updated_at
+`
+
+// Create creates a new candidate
+func (r *PgCandidateRepository) Create(ctx context.Context, candidate *Candidate) (*Candidate, error) {
+missionsJSON, _ := json.Marshal(candidate.Missions)
+mainProgramsJSON, _ := json.Marshal(candidate.MainPrograms)
+mediaJSON, _ := json.Marshal(candidate.Media)
+socialLinksJSON, _ := json.Marshal(candidate.SocialLinks)
+
+row := r.db.QueryRow(ctx, qCreateCandidate,
+candidate.ElectionID,
+candidate.Number,
+candidate.Name,
+candidate.PhotoURL,
+candidate.ShortBio,
+candidate.LongBio,
+candidate.Tagline,
+candidate.FacultyName,
+candidate.StudyProgramName,
+candidate.CohortYear,
+candidate.Vision,
+missionsJSON,
+mainProgramsJSON,
+mediaJSON,
+socialLinksJSON,
+candidate.Status,
+)
+
+c, err := scanCandidateRow(row)
+if err != nil {
+return nil, err
+}
+
+return &c, nil
+}
+
+const qUpdateCandidate = `
+UPDATE candidates SET
+number = $3,
+name = $4,
+photo_url = $5,
+short_bio = $6,
+long_bio = $7,
+tagline = $8,
+faculty_name = $9,
+study_program_name = $10,
+cohort_year = $11,
+vision = $12,
+missions = $13,
+main_programs = $14,
+media = $15,
+social_links = $16,
+status = $17,
+updated_at = NOW()
+WHERE election_id = $1 AND id = $2
+RETURNING id, election_id, number, name, photo_url, short_bio, long_bio, tagline,
+faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
+media, social_links, status, created_at, updated_at
+`
+
+// Update updates an existing candidate
+func (r *PgCandidateRepository) Update(ctx context.Context, electionID, candidateID int64, candidate *Candidate) (*Candidate, error) {
+missionsJSON, _ := json.Marshal(candidate.Missions)
+mainProgramsJSON, _ := json.Marshal(candidate.MainPrograms)
+mediaJSON, _ := json.Marshal(candidate.Media)
+socialLinksJSON, _ := json.Marshal(candidate.SocialLinks)
+
+row := r.db.QueryRow(ctx, qUpdateCandidate,
+electionID,
+candidateID,
+candidate.Number,
+candidate.Name,
+candidate.PhotoURL,
+candidate.ShortBio,
+candidate.LongBio,
+candidate.Tagline,
+candidate.FacultyName,
+candidate.StudyProgramName,
+candidate.CohortYear,
+candidate.Vision,
+missionsJSON,
+mainProgramsJSON,
+mediaJSON,
+socialLinksJSON,
+candidate.Status,
+)
+
+c, err := scanCandidateRow(row)
+if err != nil {
+if err == pgx.ErrNoRows {
+return nil, ErrCandidateNotFound
+}
+return nil, err
+}
+
+return &c, nil
+}
+
+const qDeleteCandidate = `
+DELETE FROM candidates WHERE election_id = $1 AND id = $2
+`
+
+// Delete deletes a candidate
+func (r *PgCandidateRepository) Delete(ctx context.Context, electionID, candidateID int64) error {
+result, err := r.db.Exec(ctx, qDeleteCandidate, electionID, candidateID)
+if err != nil {
+return err
+}
+
+if result.RowsAffected() == 0 {
+return ErrCandidateNotFound
+}
+
+return nil
+}
+
+const qUpdateStatus = `
+UPDATE candidates SET status = $3, updated_at = NOW()
+WHERE election_id = $1 AND id = $2
+`
+
+// UpdateStatus updates candidate status
+func (r *PgCandidateRepository) UpdateStatus(ctx context.Context, electionID, candidateID int64, status CandidateStatus) error {
+result, err := r.db.Exec(ctx, qUpdateStatus, electionID, candidateID, status)
+if err != nil {
+return err
+}
+
+if result.RowsAffected() == 0 {
+return ErrCandidateNotFound
+}
+
+return nil
+}
+
+const qCheckNumberExists = `
+SELECT EXISTS(
+SELECT 1 FROM candidates
+WHERE election_id = $1 AND number = $2 AND ($3::bigint IS NULL OR id != $3)
+)
+`
+
+// CheckNumberExists checks if candidate number is already taken in an election
+func (r *PgCandidateRepository) CheckNumberExists(ctx context.Context, electionID int64, number int, excludeCandidateID *int64) (bool, error) {
+var exists bool
+err := r.db.QueryRow(ctx, qCheckNumberExists, electionID, number, excludeCandidateID).Scan(&exists)
+return exists, err
+}
