@@ -18,13 +18,13 @@ func JWTAuth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				response.Unauthorized(w, "Missing authorization header.")
+				response.Unauthorized(w, "UNAUTHORIZED", "Missing authorization header.")
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				response.Unauthorized(w, "Invalid authorization header format.")
+				response.Unauthorized(w, "UNAUTHORIZED", "Invalid authorization header format.")
 				return
 			}
 
@@ -32,9 +32,9 @@ func JWTAuth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 			claims, err := jwtManager.ValidateAccessToken(tokenString)
 			if err != nil {
 				if errors.Is(err, auth.ErrExpiredToken) {
-					response.Unauthorized(w, "Token has expired.")
+					response.Unauthorized(w, "TOKEN_EXPIRED", "Token sudah kadaluarsa.")
 				} else {
-					response.Unauthorized(w, "Invalid token.")
+					response.Unauthorized(w, "INVALID_TOKEN", "Token tidak valid.")
 				}
 				return
 			}
@@ -58,7 +58,7 @@ func AuthStudentOnly(jwtManager *auth.JWTManager) func(http.Handler) http.Handle
 		return JWTAuth(jwtManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := ctxkeys.GetUserRole(r.Context())
 			if !ok || role != string(constants.RoleStudent) {
-				response.Forbidden(w, "Access denied. Student role required.")
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak. Hanya untuk mahasiswa.")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -72,12 +72,12 @@ func AuthAdminOnly(jwtManager *auth.JWTManager) func(http.Handler) http.Handler 
 		return JWTAuth(jwtManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := ctxkeys.GetUserRole(r.Context())
 			if !ok {
-				response.Forbidden(w, "Access denied.")
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak.")
 				return
 			}
 			
 			if role != string(constants.RoleAdmin) && role != string(constants.RoleSuperAdmin) {
-				response.Forbidden(w, "Access denied. Admin role required.")
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak. Hanya untuk admin.")
 				return
 			}
 			
@@ -92,7 +92,7 @@ func AuthTPSOperatorOnly(jwtManager *auth.JWTManager) func(http.Handler) http.Ha
 		return JWTAuth(jwtManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			role, ok := ctxkeys.GetUserRole(r.Context())
 			if !ok || role != string(constants.RoleTPSOperator) {
-				response.Forbidden(w, "Access denied. TPS Operator role required.")
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak. Hanya untuk operator TPS.")
 				return
 			}
 			next.ServeHTTP(w, r)

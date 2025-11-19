@@ -22,13 +22,13 @@ func NewAuthHandler(service *AuthService) *AuthHandler {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body.", nil)
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
 		return
 	}
 
 	// Validate input
 	if req.Username == "" || req.Password == "" {
-		response.UnprocessableEntity(w, "Username and password are required.", nil)
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "username dan password wajib diisi.")
 		return
 	}
 
@@ -59,12 +59,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body.", nil)
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
 		return
 	}
 
 	if req.RefreshToken == "" {
-		response.UnprocessableEntity(w, "Refresh token is required.", nil)
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Refresh token wajib diisi.")
 		return
 	}
 
@@ -81,12 +81,12 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body.", nil)
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
 		return
 	}
 
 	if req.RefreshToken == "" {
-		response.UnprocessableEntity(w, "Refresh token is required.", nil)
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Refresh token wajib diisi.")
 		return
 	}
 
@@ -105,7 +105,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)
 	userID, ok := ctxkeys.GetUserID(r.Context())
 	if !ok {
-		response.Unauthorized(w, "Unauthorized.")
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid atau tidak ditemukan.")
 		return
 	}
 
@@ -122,19 +122,19 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidCredentials):
-		response.Unauthorized(w, "Invalid username or password.")
+		response.Unauthorized(w, "INVALID_CREDENTIALS", "Username atau password salah.")
 
 	case errors.Is(err, ErrInactiveUser):
-		response.Forbidden(w, "Your account is inactive. Please contact administrator.")
+		response.Forbidden(w, "USER_INACTIVE", "Akun tidak aktif.")
 
 	case errors.Is(err, ErrInvalidRefreshToken):
-		response.Unauthorized(w, "Invalid or expired refresh token.")
+		response.Unauthorized(w, "INVALID_REFRESH_TOKEN", "Refresh token tidak valid atau sudah kadaluarsa.")
 
 	case errors.Is(err, ErrUserNotFound):
-		response.NotFound(w, "User not found.")
+		response.NotFound(w, "USER_NOT_FOUND", "Pengguna tidak ditemukan.")
 
 	default:
 		// Log internal error
-		response.InternalServerError(w, "An error occurred. Please try again.")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

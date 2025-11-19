@@ -33,30 +33,30 @@ func Error(w http.ResponseWriter, statusCode int, code, message string, details 
 	})
 }
 
-func BadRequest(w http.ResponseWriter, message string, details interface{}) {
-	Error(w, http.StatusBadRequest, "BAD_REQUEST", message, details)
+func BadRequest(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusBadRequest, code, message, nil)
 }
 
-func Unauthorized(w http.ResponseWriter, message string) {
-	Error(w, http.StatusUnauthorized, "UNAUTHORIZED", message, nil)
+func Unauthorized(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusUnauthorized, code, message, nil)
 }
 
-func Forbidden(w http.ResponseWriter, message string) {
-	Error(w, http.StatusForbidden, "FORBIDDEN", message, nil)
+func Forbidden(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusForbidden, code, message, nil)
 }
 
-func NotFound(w http.ResponseWriter, message string) {
-	Error(w, http.StatusNotFound, "NOT_FOUND", message, nil)
+func NotFound(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusNotFound, code, message, nil)
 }
 
-func InternalServerError(w http.ResponseWriter, message string) {
-	Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", message, nil)
+func InternalServerError(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusInternalServerError, code, message, nil)
 }
 
 func Conflict(w http.ResponseWriter, code, message string) {
 	Error(w, http.StatusConflict, code, message, nil)
 }
 
-func UnprocessableEntity(w http.ResponseWriter, message string, details interface{}) {
-	Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", message, details)
+func UnprocessableEntity(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusUnprocessableEntity, code, message, nil)
 }
