@@ -89,6 +89,27 @@ CREATE INDEX idx_candidates_status ON candidates(status);
 
 ### Setup
 
+**Option 1: Using PgStatsProvider (Recommended)**
+
+```go
+import (
+    "github.com/pemira/internal/candidate"
+    "github.com/jackc/pgx/v5/pgxpool"
+)
+
+// Initialize dependencies
+pool, _ := pgxpool.New(ctx, connString)
+
+// Setup repositories
+candidateRepo := candidate.NewPgCandidateRepository(pool)
+statsProvider := candidate.NewPgStatsProvider(pool) // Direct implementation
+
+// Setup service
+candidateService := candidate.NewService(candidateRepo, statsProvider)
+```
+
+**Option 2: Using Analytics Package Adapter**
+
 ```go
 import (
     "github.com/pemira/internal/candidate"
@@ -101,9 +122,9 @@ pool, _ := pgxpool.New(ctx, connString)
 
 // Setup repositories
 candidateRepo := candidate.NewPgCandidateRepository(pool)
-analyticsRepo := analytics.NewAnalyticsRepo(pool) // from internal/analytics
+analyticsRepo := analytics.NewAnalyticsRepo(pool)
 
-// Setup stats adapter
+// Setup stats adapter (if analytics has GetCandidateVoteStats method)
 statsAdapter := candidate.NewAnalyticsStatsAdapter(analyticsRepo)
 
 // Setup service
@@ -305,6 +326,53 @@ func TestService_ListPublicCandidates(t *testing.T) {
 }
 ```
 
+## Stats Provider Implementation
+
+### SQL Query
+
+See `queries/candidate_vote_stats.sql`:
+
+```sql
+WITH total_election AS (
+    SELECT COUNT(*)::NUMERIC AS total_votes
+    FROM votes WHERE election_id = $1
+)
+SELECT
+    v.candidate_id,
+    COUNT(*) AS candidate_votes,
+    CASE
+        WHEN te.total_votes = 0 THEN 0
+        ELSE ROUND(COUNT(*)::NUMERIC / te.total_votes * 100, 2)
+    END AS percentage
+FROM votes v
+CROSS JOIN total_election te
+WHERE v.election_id = $1
+GROUP BY v.candidate_id, te.total_votes;
+```
+
+**Features:**
+- Calculates total votes in election
+- Computes votes per candidate
+- Calculates percentage with 2 decimal precision
+- Handles zero votes case
+- Only returns candidates with votes (map lookup handles missing entries)
+
+### PgStatsProvider
+
+Direct implementation using pgxpool:
+
+```go
+statsProvider := candidate.NewPgStatsProvider(pool)
+stats, err := statsProvider.GetCandidateStats(ctx, electionID)
+// stats is map[int64]CandidateStats
+// stats[candidateID] = {TotalVotes: 100, Percentage: 45.67}
+```
+
+**Behavior:**
+- Only candidates with votes appear in map
+- Candidates without votes get default {0, 0.0} from service layer
+- Uses go:embed for SQL query
+
 ## Future Enhancements
 
 - [ ] Add admin CRUD methods (Create, Update, Delete)
@@ -314,6 +382,7 @@ func TestService_ListPublicCandidates(t *testing.T) {
 - [ ] Add caching for frequently accessed candidates
 - [ ] Add full-text search
 - [ ] Add audit logging
+- [ ] Add real-time stats updates (WebSocket)
 
 ## See Also
 
