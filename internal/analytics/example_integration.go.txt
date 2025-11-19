@@ -1,0 +1,105 @@
+// Example: How to integrate analytics package into main router
+// File: internal/http/router.go (or wherever you setup routes)
+
+package main
+
+import (
+"context"
+"log"
+"net/http"
+
+"github.com/go-chi/chi/v5"
+"github.com/go-chi/chi/v5/middleware"
+"github.com/jackc/pgx/v5/pgxpool"
+
+"pemira-api/internal/analytics"
+"pemira-api/internal/http/middleware" // your auth middleware
+)
+
+type Dependencies struct {
+DB *pgxpool.Pool
+// ... other dependencies
+}
+
+func SetupRouter(deps Dependencies) http.Handler {
+r := chi.NewRouter()
+
+// Global middleware
+r.Use(middleware.Logger)
+r.Use(middleware.Recoverer)
+
+// Public routes
+r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+w.Write([]byte("OK"))
+})
+
+// Admin routes
+r.Route("/admin", func(admin chi.Router) {
+// Auth middleware for all admin routes
+admin.Use(middleware.AuthAdminOnly) // your custom middleware
+
+// Analytics routes
+admin.Route("/elections/{electionID}/analytics", func(ar chi.Router) {
+// Setup analytics components
+analyticsRepo := analytics.NewAnalyticsRepo(deps.DB)
+analyticsService := analytics.NewService(analyticsRepo)
+responseWriter := analytics.NewStandardResponseWriter()
+analyticsHandler := analytics.NewHandler(analyticsService, responseWriter)
+
+// Mount all analytics endpoints
+analyticsHandler.Mount(ar)
+})
+
+// Other admin routes...
+admin.Get("/elections", listElections)
+admin.Post("/elections", createElection)
+})
+
+return r
+}
+
+func main() {
+// Setup database
+pool, err := pgxpool.New(context.Background(), "postgres://...")
+if err != nil {
+log.Fatal(err)
+}
+defer pool.Close()
+
+// Setup dependencies
+deps := Dependencies{
+DB: pool,
+}
+
+// Setup router
+router := SetupRouter(deps)
+
+// Start server
+log.Println("Server starting on :8080")
+http.ListenAndServe(":8080", router)
+}
+
+// Available endpoints after mounting:
+//
+// GET /admin/elections/1/analytics/dashboard
+// GET /admin/elections/1/analytics/timeline/votes
+// GET /admin/elections/1/analytics/timeline/candidates
+// GET /admin/elections/1/analytics/timeline/turnout
+// GET /admin/elections/1/analytics/heatmap/faculty-candidate
+// GET /admin/elections/1/analytics/cohort-breakdown
+// GET /admin/elections/1/analytics/peak-hours
+// GET /admin/elections/1/analytics/voting-velocity
+
+// Example cURL requests:
+//
+// # Get all analytics data
+// curl -X GET "http://localhost:8080/admin/elections/1/analytics/dashboard" \
+//   -H "Authorization: Bearer YOUR_TOKEN"
+//
+// # Get hourly votes timeline
+// curl -X GET "http://localhost:8080/admin/elections/1/analytics/timeline/votes" \
+//   -H "Authorization: Bearer YOUR_TOKEN"
+//
+// # Get faculty heatmap
+// curl -X GET "http://localhost:8080/admin/elections/1/analytics/heatmap/faculty-candidate" \
+//   -H "Authorization: Bearer YOUR_TOKEN"
