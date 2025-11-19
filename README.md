@@ -22,22 +22,49 @@ Electronic voting system API for university student elections (Pemilihan Raya Ma
 ```
 .
 ├── cmd/
-│   ├── api/          # Main API server
-│   └── worker/       # Background worker
+│   ├── api/              # Main API server
+│   └── worker/           # Background worker (optional)
 ├── internal/
-│   ├── auth/         # Authentication & JWT
-│   ├── config/       # Configuration
-│   ├── domain/       # Business logic
-│   ├── http/         # HTTP handlers
-│   │   ├── middleware/
-│   │   └── response/
-│   └── ws/           # WebSocket handlers
+│   ├── auth/             # Authentication, JWT, user management
+│   ├── election/         # Election & phase management
+│   ├── voter/            # DPT (Daftar Pemilih Tetap) management
+│   ├── candidate/        # Candidate profiles & campaigns
+│   ├── tps/              # TPS management, QR codes, checkins
+│   ├── voting/           # Voting engine (online & TPS)
+│   ├── monitoring/       # Live count, statistics (TODO)
+│   ├── announcement/     # Announcements (TODO)
+│   ├── audit/            # Audit logs (TODO)
+│   ├── fileimport/       # CSV/XLSX import utilities (TODO)
+│   ├── config/           # Configuration loader
+│   ├── http/             # HTTP server setup
+│   │   ├── middleware/   # Auth, RBAC, logging
+│   │   └── response/     # JSON response helpers
+│   ├── ws/               # WebSocket hub & handlers
+│   └── shared/           # Common utilities
+│       ├── constants/    # Enums, roles, statuses
+│       ├── ctxkeys/      # Context keys
+│       ├── errors.go     # Domain errors
+│       └── pagination.go # Pagination helpers
 ├── pkg/
-│   └── database/     # Database utilities
-├── migrations/       # SQL migrations
+│   └── database/         # Database connection utilities
+├── migrations/           # SQL migrations (goose)
+├── docs/                 # Documentation (TODO: ERD, OpenAPI)
 ├── docker-compose.yml
 ├── Dockerfile
 └── Makefile
+```
+
+## Module Structure
+
+Each module follows this pattern:
+```
+internal/<module>/
+├── entity.go         # Domain entities
+├── repository.go     # Data access interface
+├── service.go        # Business logic
+├── http_handler.go   # HTTP handlers
+├── dto.go            # Request/Response DTOs
+└── ws_handler.go     # WebSocket handlers (if needed)
 ```
 
 ## Getting Started

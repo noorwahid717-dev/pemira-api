@@ -15,6 +15,7 @@ import (
 
 	"pemira-api/internal/config"
 	"pemira-api/internal/http/response"
+	"pemira-api/internal/ws"
 	"pemira-api/pkg/database"
 )
 
@@ -38,6 +39,9 @@ func main() {
 
 	logger.Info("connected to database")
 
+	hub := ws.NewHub()
+	go hub.Run(ctx)
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -53,6 +57,9 @@ func main() {
 	})
 
 	r.Handle("/metrics", promhttp.Handler())
+
+	wsHandler := ws.NewHandler(hub)
+	wsHandler.RegisterRoutes(r)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
