@@ -1,0 +1,610 @@
+openapi: 3.0.3
+info:
+  title: PEMIRA Voting API
+  description: |
+    API untuk modul voting dalam sistem PEMIRA (Pemilihan Raya Mahasiswa).
+    
+    ## Fitur Utama
+    - Voting Online langsung dari dashboard
+    - Voting via TPS setelah check-in disetujui
+    - Validasi ketat untuk mencegah double voting
+    - Transaction-based dengan row-level locks
+    - Anonymous vote tokens sebagai receipt
+    
+    ## Keamanan
+    - Semua endpoint memerlukan JWT authentication
+    - Role STUDENT wajib untuk semua operasi voting
+    - Rate limiting: 3 requests per minute untuk cast vote
+    - Audit logging untuk semua operasi voting
+  version: 1.0.0
+  contact:
+    name: PEMIRA API Support
+    email: support@pemira.local
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+  - url: https://api.pemira.uniwa.ac.id/api/v1
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Voting
+    description: Operasi voting online dan TPS
+  - name: Receipt
+    description: Bukti voting dan status
+
+paths:
+  /voting/config:
+    get:
+      tags:
+        - Voting
+      summary: Get voting configuration and eligibility
+      description: |
+        Cek apakah user boleh voting dan mode voting apa yang tersedia.
+        Digunakan di dashboard pemilih sebelum masuk halaman voting.
+      operationId: getVotingConfig
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Voting configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/VotingConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ElectionNotFound'
+
+  /voting/online/cast:
+    post:
+      tags:
+        - Voting
+      summary: Cast vote online
+      description: |
+        Submit vote secara online. Operasi ini menggunakan transaction dengan row-level lock
+        untuk mencegah double voting dan memastikan ACID compliance.
+        
+        **Validation:**
+        - Voter must be eligible (in DPT)
+        - Voter has not voted yet
+        - Election must be in VOTING phase
+        - Candidate must be active
+        - Online voting must be enabled
+      operationId: castOnlineVote
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CastVoteRequest'
+      responses:
+        '200':
+          description: Vote cast successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/VoteReceipt'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/CandidateNotFound'
+        '409':
+          $ref: '#/components/responses/AlreadyVoted'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /voting/tps/cast:
+    post:
+      tags:
+        - Voting
+      summary: Cast vote via TPS
+      description: |
+        Submit vote melalui TPS setelah check-in disetujui panitia.
+        TPS ID tidak perlu dikirim dari client, akan di-resolve dari check-in terbaru.
+        
+        **Prerequisites:**
+        - Check-in TPS harus berstatus APPROVED
+        - Check-in belum expire (max 15 menit)
+        - TPS voting mode must be enabled
+        
+        **Validation:**
+        - Sama dengan online voting
+        - Plus: harus ada check-in TPS yang approved
+      operationId: castTPSVote
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CastVoteRequest'
+      responses:
+        '200':
+          description: Vote cast successfully via TPS
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TPSVoteReceipt'
+        '400':
+          $ref: '#/components/responses/TPSRequired'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/CandidateNotFound'
+        '409':
+          $ref: '#/components/responses/AlreadyVoted'
+
+  /voting/tps/status:
+    get:
+      tags:
+        - Voting
+      summary: Check TPS voting eligibility
+      description: |
+        Cek apakah user eligible untuk voting via TPS.
+        Digunakan sebelum menampilkan form voting di mode TPS.
+      operationId: getTPSVotingStatus
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: TPS voting status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/TPSEligible'
+                      - $ref: '#/components/schemas/TPSNotEligible'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /voting/receipt:
+    get:
+      tags:
+        - Receipt
+      summary: Get voting receipt
+      description: |
+        Dapatkan bukti bahwa user sudah voting.
+        **PENTING:** Endpoint ini tidak mengungkap kandidat yang dipilih.
+      operationId: getVotingReceipt
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Receipt retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    oneOf:
+                      - $ref: '#/components/schemas/ReceiptNotVoted'
+                      - $ref: '#/components/schemas/ReceiptVoted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from login endpoint.
+        Claims required:
+        - `sub`: user_account_id / voter_id
+        - `role`: must be "STUDENT"
+
+  schemas:
+    VotingConfig:
+      type: object
+      properties:
+        election:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            code:
+              type: string
+              example: "PEMIRA_UNIWA_2025"
+            name:
+              type: string
+              example: "Pemira UNIWA 2025"
+            status:
+              type: string
+              enum: [REGISTRATION, CAMPAIGN, VOTING_OPEN, COUNTING, ANNOUNCEMENT]
+              example: "VOTING_OPEN"
+            voting_start_at:
+              type: string
+              format: date-time
+              example: "2025-06-12T08:00:00Z"
+            voting_end_at:
+              type: string
+              format: date-time
+              example: "2025-06-15T16:00:00Z"
+        voter:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 123
+            nim:
+              type: string
+              example: "2110510023"
+            name:
+              type: string
+              example: "Noah Febriyansyah"
+            is_eligible:
+              type: boolean
+              example: true
+            has_voted:
+              type: boolean
+              example: false
+            voting_method:
+              type: string
+              nullable: true
+              enum: [ONLINE, TPS, null]
+              example: null
+            voted_at:
+              type: string
+              format: date-time
+              nullable: true
+              example: null
+        mode:
+          type: object
+          properties:
+            online_enabled:
+              type: boolean
+              example: true
+            tps_enabled:
+              type: boolean
+              example: true
+
+    CastVoteRequest:
+      type: object
+      required:
+        - candidate_id
+      properties:
+        candidate_id:
+          type: integer
+          description: ID kandidat yang dipilih
+          example: 2
+          minimum: 1
+
+    VoteReceipt:
+      type: object
+      properties:
+        election_id:
+          type: integer
+          example: 1
+        voter_id:
+          type: integer
+          example: 123
+        method:
+          type: string
+          enum: [ONLINE, TPS]
+          example: "ONLINE"
+        voted_at:
+          type: string
+          format: date-time
+          example: "2025-06-13T10:23:45Z"
+        receipt:
+          type: object
+          properties:
+            token_hash:
+              type: string
+              description: Anonymous token sebagai bukti voting
+              example: "vt_9f2a8d3c3b5e"
+            note:
+              type: string
+              example: "Simpan token ini sebagai bukti bahwa sistem telah mencatat suara Anda."
+
+    TPSVoteReceipt:
+      allOf:
+        - $ref: '#/components/schemas/VoteReceipt'
+        - type: object
+          properties:
+            tps:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 5
+                code:
+                  type: string
+                  example: "TPS02"
+                name:
+                  type: string
+                  example: "TPS 2 – FEB"
+
+    TPSEligible:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+          example: true
+        tps:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 5
+            code:
+              type: string
+              example: "TPS02"
+            name:
+              type: string
+              example: "TPS 2 – FEB"
+        expires_at:
+          type: string
+          format: date-time
+          description: Waktu expire check-in (biasanya 15 menit dari approval)
+          example: "2025-06-13T11:25:00Z"
+
+    TPSNotEligible:
+      type: object
+      properties:
+        eligible:
+          type: boolean
+          example: false
+        reason:
+          type: string
+          enum: [TPS_REQUIRED, TPS_CHECKIN_NOT_APPROVED, TPS_CHECKIN_EXPIRED]
+          example: "TPS_REQUIRED"
+
+    ReceiptNotVoted:
+      type: object
+      properties:
+        has_voted:
+          type: boolean
+          example: false
+
+    ReceiptVoted:
+      type: object
+      properties:
+        has_voted:
+          type: boolean
+          example: true
+        election_id:
+          type: integer
+          example: 1
+        method:
+          type: string
+          enum: [ONLINE, TPS]
+          example: "TPS"
+        tps:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+              example: 5
+            code:
+              type: string
+              example: "TPS02"
+            name:
+              type: string
+              example: "TPS 2 – FEB"
+        voted_at:
+          type: string
+          format: date-time
+          example: "2025-06-13T11:15:02Z"
+        receipt:
+          type: object
+          properties:
+            token_hash:
+              type: string
+              example: "vt_7d1fbd1029ac"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "ALREADY_VOTED"
+            message:
+              type: string
+              example: "Anda sudah menggunakan hak suara untuk pemilu ini."
+            details:
+              type: object
+              nullable: true
+              example: null
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Token missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Token tidak valid atau sudah expire."
+              details: null
+
+    ElectionNotFound:
+      description: Election not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ELECTION_NOT_FOUND"
+              message: "Tidak ada pemilu aktif saat ini."
+              details: null
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "candidate_id tidak boleh kosong."
+              details:
+                field: "candidate_id"
+                constraint: "required"
+
+    CandidateNotFound:
+      description: Candidate not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "CANDIDATE_NOT_FOUND"
+              message: "Kandidat dengan ID tersebut tidak ditemukan."
+              details: null
+
+    AlreadyVoted:
+      description: User has already voted
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "ALREADY_VOTED"
+              message: "Anda sudah menggunakan hak suara untuk pemilu ini."
+              details: null
+
+    TPSRequired:
+      description: TPS check-in required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            not_found:
+              summary: Check-in not found
+              value:
+                success: false
+                error:
+                  code: "TPS_CHECKIN_NOT_FOUND"
+                  message: "Anda belum melakukan check-in di TPS."
+                  details: null
+            not_approved:
+              summary: Check-in not approved
+              value:
+                success: false
+                error:
+                  code: "TPS_CHECKIN_NOT_APPROVED"
+                  message: "Check-in TPS Anda belum disetujui panitia."
+                  details: null
+            expired:
+              summary: Check-in expired
+              value:
+                success: false
+                error:
+                  code: "TPS_CHECKIN_EXPIRED"
+                  message: "Check-in TPS Anda sudah kadaluarsa."
+                  details: null
+
+  examples:
+    VotingConfigResponse:
+      summary: Voting configuration example
+      value:
+        success: true
+        data:
+          election:
+            id: 1
+            code: "PEMIRA_UNIWA_2025"
+            name: "Pemira UNIWA 2025"
+            status: "VOTING_OPEN"
+            voting_start_at: "2025-06-12T08:00:00Z"
+            voting_end_at: "2025-06-15T16:00:00Z"
+          voter:
+            id: 123
+            nim: "2110510023"
+            name: "Noah Febriyansyah"
+            is_eligible: true
+            has_voted: false
+            voting_method: null
+            voted_at: null
+          mode:
+            online_enabled: true
+            tps_enabled: true
+
+    OnlineVoteSuccess:
+      summary: Successful online vote
+      value:
+        success: true
+        data:
+          election_id: 1
+          voter_id: 123
+          method: "ONLINE"
+          voted_at: "2025-06-13T10:23:45Z"
+          receipt:
+            token_hash: "vt_9f2a8d3c3b5e"
+            note: "Simpan token ini sebagai bukti bahwa sistem telah mencatat suara Anda."
+
+    TPSVoteSuccess:
+      summary: Successful TPS vote
+      value:
+        success: true
+        data:
+          election_id: 1
+          voter_id: 123
+          method: "TPS"
+          tps:
+            id: 5
+            code: "TPS02"
+            name: "TPS 2 – FEB"
+          voted_at: "2025-06-13T11:15:02Z"
+          receipt:
+            token_hash: "vt_7d1fbd1029ac"
+            note: "Suara Anda melalui TPS sudah dicatat."
