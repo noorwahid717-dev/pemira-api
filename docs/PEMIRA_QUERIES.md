@@ -323,6 +323,76 @@ WHERE e.id = $1;
 
 ---
 
+## 📈 10. Analytics & Advanced Reporting
+
+### Timeline Votes per Hour
+
+Time-series data untuk grafik line/bar.
+
+**File:** `queries/analytics_01_timeline_votes_per_hour.sql`
+
+Generates hourly buckets dari voting_start_at sampai voting_end_at dengan COALESCE untuk jam yang tidak ada suara.
+
+### Timeline by Channel (ONLINE vs TPS)
+
+Stacked bar chart: ONLINE vs TPS per jam.
+
+**File:** `queries/analytics_02_timeline_votes_by_channel.sql`
+
+### Timeline per Candidate
+
+Multi-line chart dengan satu series per kandidat.
+
+**File:** `queries/analytics_03_timeline_votes_per_candidate.sql`
+
+### Heatmap: Faculty × Candidate
+
+Matrix visualization untuk melihat preferensi fakultas.
+
+**Files:**
+- `analytics_04_heatmap_faculty_candidate.sql` - Raw counts
+- `analytics_05_heatmap_faculty_candidate_percent.sql` - Percentage within faculty
+
+### Cumulative Turnout Timeline
+
+Grafik kumulatif: "dari jam ke jam berapa % turnout".
+
+**File:** `analytics_06_turnout_cumulative_timeline.sql`
+
+Includes `votes_in_hour`, `cumulative_votes`, dan `cumulative_turnout_percent`.
+
+### Demographic Breakdowns
+
+**By Cohort Year:**
+```sql
+-- File: analytics_07_votes_by_cohort_candidate.sql
+-- Output: votes grouped by cohort_year × candidate
+```
+
+**By Prodi (Granular):**
+```sql
+-- File: analytics_08_votes_by_prodi_candidate.sql
+-- Output: faculty + prodi + candidate breakdown
+```
+
+### Peak Hours Analysis
+
+Ranking jam tersibuk untuk capacity planning.
+
+**File:** `analytics_09_peak_hours_analysis.sql`
+
+Output: Top 20 hours dengan votes, hour_of_day, day_name, rank.
+
+### Voting Velocity
+
+Statistical analysis: berapa rata-rata gap (menit) antar suara?
+
+**File:** `analytics_10_voting_velocity.sql`
+
+Output: avg, min, max, median, p95 gap_minutes.
+
+---
+
 ## 🔍 Bonus Queries
 
 ### Cek Duplikasi Vote (Audit)

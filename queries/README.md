@@ -22,6 +22,18 @@ SQL query files untuk reporting & analytics PEMIRA UNIWA.
 - `top_5_busiest_tps.sql` - Ranking TPS tersibuk
 - `voters_not_voted_yet.sql` - List pemilih belum vote
 
+### Analytics & Advanced Reporting
+- `analytics_01_timeline_votes_per_hour.sql` - Time-series suara per jam (total)
+- `analytics_02_timeline_votes_by_channel.sql` - Time-series per channel (ONLINE/TPS)
+- `analytics_03_timeline_votes_per_candidate.sql` - Time-series per kandidat
+- `analytics_04_heatmap_faculty_candidate.sql` - Heatmap fakultas × kandidat (count)
+- `analytics_05_heatmap_faculty_candidate_percent.sql` - Heatmap dengan % per fakultas
+- `analytics_06_turnout_cumulative_timeline.sql` - Cumulative turnout over time
+- `analytics_07_votes_by_cohort_candidate.sql` - Breakdown per angkatan
+- `analytics_08_votes_by_prodi_candidate.sql` - Breakdown per prodi (granular)
+- `analytics_09_peak_hours_analysis.sql` - Analisis jam tersibuk
+- `analytics_10_voting_velocity.sql` - Velocity metrics (avg gap antar vote)
+
 ## 🚀 Usage
 
 ### Command Line (psql)
@@ -88,6 +100,24 @@ Most queries use `$1` for `election_id`, except:
 2. **Caching**: Cache dashboard query (11) for 1-5 minutes
 3. **Pagination**: Add `LIMIT` and `OFFSET` for large results
 4. **Connection Pool**: Use connection pooling for concurrent queries
+
+## 📈 Visualization Use Cases
+
+### Timeline Charts (Line/Bar)
+- `analytics_01`, `analytics_02`, `analytics_03` - Suara over time
+- `analytics_06` - Cumulative turnout progression
+
+### Heatmaps
+- `analytics_04`, `analytics_05` - Faculty/Prodi × Candidate matrix
+- `analytics_08` - Granular prodi breakdown
+
+### Clustered/Grouped Charts
+- `analytics_02` - ONLINE vs TPS stacked bar
+- `analytics_07` - Votes by cohort year
+- `analytics_09` - Peak hours ranking
+
+### Statistical Analysis
+- `analytics_10` - Velocity & gap analysis for capacity planning
 
 ## 📖 Documentation
 
