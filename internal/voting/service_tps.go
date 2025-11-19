@@ -377,8 +377,6 @@ type TPSVotingEligibility struct {
 // ===== Errors =====
 
 var (
-	ErrCheckinExpired    = VotingError{Code: "CHECKIN_EXPIRED", Message: "Waktu check-in sudah habis"}
-	ErrAlreadyVoted      = VotingError{Code: "ALREADY_VOTED", Message: "Anda sudah melakukan voting"}
 	ErrInvalidCandidate  = VotingError{Code: "INVALID_CANDIDATE", Message: "Kandidat tidak valid"}
 	ErrNoApprovedCheckin = VotingError{Code: "NO_APPROVED_CHECKIN", Message: "Belum ada check-in yang disetujui"}
 )
