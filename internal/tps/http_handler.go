@@ -25,100 +25,349 @@ func NewHandler(service *Service) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
-	r.Get("/tps", h.List)
-	r.Get("/tps/{id}", h.GetByID)
-	r.Post("/tps/{id}/checkin", h.CreateCheckin)
-	r.Post("/tps/checkin/{checkinID}/approve", h.ApproveCheckin)
-	r.Get("/tps/{id}/checkins", h.ListCheckins)
+	// Admin TPS Management
+	r.Route("/admin/tps", func(r chi.Router) {
+		r.Get("/", h.AdminListTPS)
+		r.Post("/", h.AdminCreateTPS)
+		r.Get("/{id}", h.AdminGetTPS)
+		r.Put("/{id}", h.AdminUpdateTPS)
+		r.Put("/{id}/panitia", h.AdminAssignPanitia)
+		r.Post("/{id}/qr/regenerate", h.AdminRegenerateQR)
+	})
+	
+	// Student Check-in
+	r.Route("/tps", func(r chi.Router) {
+		r.Post("/checkin/scan", h.StudentScanQR)
+		r.Get("/checkin/status", h.StudentCheckinStatus)
+	})
+	
+	// TPS Panel (Panitia)
+	r.Route("/tps/{tps_id}", func(r chi.Router) {
+		r.Get("/summary", h.PanelGetSummary)
+		r.Get("/checkins", h.PanelListCheckins)
+		r.Post("/checkins/{checkin_id}/approve", h.PanelApproveCheckin)
+		r.Post("/checkins/{checkin_id}/reject", h.PanelRejectCheckin)
+	})
 }
 
-func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	electionID, _ := strconv.ParseInt(r.URL.Query().Get("election_id"), 10, 64)
+// ===== ADMIN ENDPOINTS =====
+
+func (h *Handler) AdminListTPS(w http.ResponseWriter, r *http.Request) {
+	filter := ListFilter{
+		Status:     r.URL.Query().Get("status"),
+		ElectionID: parseInt64(r.URL.Query().Get("election_id")),
+		Page:       parseInt(r.URL.Query().Get("page"), 1),
+		Limit:      parseInt(r.URL.Query().Get("limit"), 20),
+	}
 	
-	tpsList, err := h.service.List(r.Context(), electionID)
+	result, err := h.service.List(r.Context(), filter)
 	if err != nil {
 		response.InternalServerError(w, "Failed to fetch TPS list")
 		return
 	}
-
-	response.Success(w, http.StatusOK, tpsList)
+	
+	response.Success(w, http.StatusOK, result)
 }
 
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) AdminGetTPS(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		response.BadRequest(w, "Invalid TPS ID", nil)
 		return
 	}
-
-	tps, err := h.service.GetByID(r.Context(), id)
+	
+	result, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
-		response.NotFound(w, "TPS not found")
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
 		return
 	}
-
-	response.Success(w, http.StatusOK, tps)
+	
+	response.Success(w, http.StatusOK, result)
 }
 
-func (h *Handler) CreateCheckin(w http.ResponseWriter, r *http.Request) {
-	var req CheckinRequest
+func (h *Handler) AdminCreateTPS(w http.ResponseWriter, r *http.Request) {
+	var req CreateTPSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.BadRequest(w, "Invalid request body", nil)
 		return
 	}
-
+	
 	if err := h.validate.Struct(req); err != nil {
-		response.BadRequest(w, "Validation failed", err.Error())
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
 		return
 	}
-
-	checkin := &TPSCheckin{
-		TPSID:   req.TPSID,
-		VoterID: req.VoterID,
-		Status:  "PENDING",
-	}
-
-	if err := h.service.CreateCheckin(r.Context(), checkin); err != nil {
-		response.InternalServerError(w, "Failed to create checkin")
+	
+	id, err := h.service.Create(r.Context(), &req)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
 		return
 	}
-
-	response.Success(w, http.StatusCreated, checkin)
+	
+	response.Success(w, http.StatusCreated, map[string]interface{}{
+		"id":     id,
+		"code":   req.Code,
+		"status": req.Status,
+	})
 }
 
-func (h *Handler) ApproveCheckin(w http.ResponseWriter, r *http.Request) {
-	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkinID"), 10, 64)
+func (h *Handler) AdminUpdateTPS(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid checkin ID", nil)
+		response.BadRequest(w, "Invalid TPS ID", nil)
 		return
 	}
+	
+	var req UpdateTPSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid request body", nil)
+		return
+	}
+	
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+	
+	if err := h.service.Update(r.Context(), id, &req); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"id":     id,
+		"status": req.Status,
+	})
+}
 
+func (h *Handler) AdminAssignPanitia(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid TPS ID", nil)
+		return
+	}
+	
+	var req AssignPanitiaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid request body", nil)
+		return
+	}
+	
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+	
+	if err := h.service.AssignPanitia(r.Context(), id, &req); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"tps_id":        id,
+		"total_members": len(req.Members),
+	})
+}
+
+func (h *Handler) AdminRegenerateQR(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid TPS ID", nil)
+		return
+	}
+	
+	result, err := h.service.RegenerateQR(r.Context(), id)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
+
+// ===== STUDENT ENDPOINTS =====
+
+func (h *Handler) StudentScanQR(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
 		response.Unauthorized(w, "Unauthorized")
 		return
 	}
-
-	if err := h.service.ApproveCheckin(r.Context(), checkinID, userID); err != nil {
-		response.InternalServerError(w, "Failed to approve checkin")
+	
+	var req ScanQRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid request body", nil)
 		return
 	}
-
-	response.Success(w, http.StatusOK, map[string]bool{"success": true})
+	
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+	
+	result, err := h.service.ScanQR(r.Context(), userID, &req)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
 }
 
-func (h *Handler) ListCheckins(w http.ResponseWriter, r *http.Request) {
-	tpsID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+func (h *Handler) StudentCheckinStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
+	if !ok {
+		response.Unauthorized(w, "Unauthorized")
+		return
+	}
+	
+	electionID := parseInt64(r.URL.Query().Get("election_id"))
+	if electionID == 0 {
+		electionID = 1 // Default to active election
+	}
+	
+	result, err := h.service.GetCheckinStatus(r.Context(), userID, electionID)
+	if err != nil {
+		response.InternalServerError(w, "Failed to get check-in status")
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
+
+// ===== TPS PANEL ENDPOINTS =====
+
+func (h *Handler) PanelGetSummary(w http.ResponseWriter, r *http.Request) {
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
 	if err != nil {
 		response.BadRequest(w, "Invalid TPS ID", nil)
 		return
 	}
-
-	checkins, err := h.service.ListCheckins(r.Context(), tpsID)
-	if err != nil {
-		response.InternalServerError(w, "Failed to fetch checkins")
+	
+	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
+	if !ok {
+		response.Unauthorized(w, "Unauthorized")
 		return
 	}
+	
+	result, err := h.service.GetTPSSummary(r.Context(), tpsID, userID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
 
-	response.Success(w, http.StatusOK, checkins)
+func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid TPS ID", nil)
+		return
+	}
+	
+	status := r.URL.Query().Get("status")
+	if status == "" {
+		status = CheckinStatusPending
+	}
+	
+	page := parseInt(r.URL.Query().Get("page"), 1)
+	limit := parseInt(r.URL.Query().Get("limit"), 50)
+	
+	result, err := h.service.ListCheckinQueue(r.Context(), tpsID, status, page, limit)
+	if err != nil {
+		response.InternalServerError(w, "Failed to fetch check-in queue")
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
+
+func (h *Handler) PanelApproveCheckin(w http.ResponseWriter, r *http.Request) {
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid TPS ID", nil)
+		return
+	}
+	
+	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid check-in ID", nil)
+		return
+	}
+	
+	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
+	if !ok {
+		response.Unauthorized(w, "Unauthorized")
+		return
+	}
+	
+	result, err := h.service.ApproveCheckin(r.Context(), tpsID, checkinID, userID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
+
+func (h *Handler) PanelRejectCheckin(w http.ResponseWriter, r *http.Request) {
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid TPS ID", nil)
+		return
+	}
+	
+	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
+	if err != nil {
+		response.BadRequest(w, "Invalid check-in ID", nil)
+		return
+	}
+	
+	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
+	if !ok {
+		response.Unauthorized(w, "Unauthorized")
+		return
+	}
+	
+	var req RejectCheckinRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid request body", nil)
+		return
+	}
+	
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+	
+	result, err := h.service.RejectCheckin(r.Context(), tpsID, checkinID, userID, req.Reason)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	
+	response.Success(w, http.StatusOK, result)
+}
+
+// Helper functions
+func parseInt64(s string) int64 {
+	i, _ := strconv.ParseInt(s, 10, 64)
+	return i
+}
+
+func parseInt(s string, defaultVal int) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultVal
+	}
+	return i
 }
