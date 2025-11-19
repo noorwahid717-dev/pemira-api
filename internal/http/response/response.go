@@ -52,3 +52,11 @@ func NotFound(w http.ResponseWriter, message string) {
 func InternalServerError(w http.ResponseWriter, message string) {
 	Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", message, nil)
 }
+
+func Conflict(w http.ResponseWriter, code, message string) {
+	Error(w, http.StatusConflict, code, message, nil)
+}
+
+func UnprocessableEntity(w http.ResponseWriter, message string, details interface{}) {
+	Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", message, details)
+}
