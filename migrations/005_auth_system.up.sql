@@ -1,3 +1,4 @@
+-- +goose Up
 -- Auth System Migration
 -- Adds user_accounts and user_sessions tables for JWT-based authentication
 

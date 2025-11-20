@@ -1,3 +1,4 @@
+-- +goose Down
 -- Drop triggers
 DROP TRIGGER IF EXISTS update_voter_status_updated_at ON voter_status;
 DROP TRIGGER IF EXISTS update_tps_updated_at ON tps;
