@@ -6,13 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
-	
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	
+
 	"pemira-api/internal/election"
 	"pemira-api/internal/shared"
-	"pemira-api/internal/shared/constants"
 	"pemira-api/internal/tps"
 )
 
@@ -83,31 +82,31 @@ func (s *Service) CastOnlineVote(ctx context.Context, voterID, candidateID int64
 	if s.db == nil || s.electionRepo == nil {
 		return nil, errors.New("not implemented")
 	}
-	
+
 	// 1. Get current election
-	election, err := s.electionRepo.GetCurrent(ctx)
+	election, err := s.electionRepo.GetCurrentElection(ctx)
 	if err != nil {
 		return nil, translateNotFound(err, ErrElectionNotFound)
 	}
-	
+
 	// 2. Validate election status
 	// TODO: Check current_phase from election table or phase schedule
 	// For now, assume election has a current_phase field or we check is_active
-	if !election.IsActive {
+	if election.Status != election.ElectionStatusVotingOpen {
 		return nil, ErrElectionNotOpen
 	}
-	
+
 	// 3. Validate online mode enabled
-	if election.VotingMode != constants.VotingModeOnline && election.VotingMode != constants.VotingModeHybrid {
+	if !election.OnlineEnabled {
 		return nil, ErrMethodNotAllowed
 	}
-	
+
 	// 4. Cast vote with transaction
 	result, err := s.castVote(ctx, election.ID, voterID, candidateID, "ONLINE", nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 5. Convert to DTO
 	return &VoteReceipt{
 		ElectionID: result.ElectionID,
@@ -127,68 +126,68 @@ func (s *Service) CastTPSVote(ctx context.Context, voterID, candidateID int64) (
 	if s.db == nil || s.electionRepo == nil {
 		return nil, errors.New("not implemented")
 	}
-	
+
 	// 1. Get current election
-	election, err := s.electionRepo.GetCurrent(ctx)
+	election, err := s.electionRepo.GetCurrentElection(ctx)
 	if err != nil {
 		return nil, translateNotFound(err, ErrElectionNotFound)
 	}
-	
+
 	// 2. Validate election status
-	if !election.IsActive {
+	if election.Status != election.ElectionStatusVotingOpen {
 		return nil, ErrElectionNotOpen
 	}
-	
+
 	// 3. Validate TPS mode enabled
-	if election.VotingMode != constants.VotingModeTPS && election.VotingMode != constants.VotingModeHybrid {
+	if !election.TPSEnabled {
 		return nil, ErrMethodNotAllowed
 	}
-	
+
 	// 4. Get latest approved check-in (must be done in transaction for consistency)
 	var checkin *tps.TPSCheckin
 	var tpsEntry *tps.TPS
-	
+
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		checkin, err = s.voteRepo.GetLatestApprovedCheckin(ctx, tx, election.ID, voterID)
 		if err != nil {
 			return translateNotFound(err, ErrTPSCheckinNotFound)
 		}
-		
+
 		// Validate check-in status
 		if checkin.Status != tps.CheckinStatusApproved {
 			return ErrTPSCheckinNotApproved
 		}
-		
+
 		// Validate not expired (15 minutes TTL)
 		if checkin.ExpiresAt != nil && checkin.ExpiresAt.Before(time.Now().UTC()) {
 			return ErrCheckinExpired
 		}
-		
+
 		// Get TPS info
 		tpsEntry, err = s.voteRepo.GetTPSByID(ctx, tx, checkin.TPSID)
 		if err != nil {
 			return translateNotFound(err, ErrTPSNotFound)
 		}
-		
+
 		return nil
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 5. Cast vote with TPS info
 	result, err := s.castVote(ctx, election.ID, voterID, candidateID, "TPS", &tpsEntry.ID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// 6. Mark check-in as used
 	_ = s.withTx(ctx, func(tx pgx.Tx) error {
 		return s.voteRepo.MarkCheckinUsed(ctx, tx, checkin.ID, time.Now().UTC())
 	})
-	
+
 	// 7. Convert to DTO
 	return &VoteReceipt{
 		ElectionID: result.ElectionID,
@@ -342,7 +341,7 @@ func (s *Service) castVote(
 func (s *Service) GetTPSVotingStatus(ctx context.Context, voterID int64) (*TPSVotingStatus, error) {
 	// TODO: Implement
 	// Check latest TPS check-in and its status
-	
+
 	return &TPSVotingStatus{
 		Eligible: false,
 		Reason:   stringPtr("TPS_REQUIRED"),
@@ -353,7 +352,7 @@ func (s *Service) GetTPSVotingStatus(ctx context.Context, voterID int64) (*TPSVo
 func (s *Service) GetVotingReceipt(ctx context.Context, voterID int64) (*ReceiptResponse, error) {
 	// TODO: Implement
 	// Query voter_status and return receipt info
-	
+
 	return &ReceiptResponse{
 		HasVoted: false,
 	}, nil

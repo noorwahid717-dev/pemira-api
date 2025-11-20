@@ -1,51 +1,89 @@
 package election
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	
+	"pemira-api/internal/auth"
 	"pemira-api/internal/http/response"
 )
 
-type Handler struct {
-	service *Service
+type ElectionService interface {
+	GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error)
+	GetMeStatus(ctx context.Context, authUser auth.AuthUser, electionID int64) (*MeStatusDTO, error)
 }
 
-func NewHandler(service *Service) *Handler {
-	return &Handler{service: service}
+type Handler struct {
+	svc ElectionService
+}
+
+func NewHandler(svc ElectionService) *Handler {
+	return &Handler{svc: svc}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/elections/current", h.GetCurrent)
-	r.Get("/elections/{id}", h.GetByID)
+	r.Get("/elections/{electionID}/me/status", h.GetMeStatus)
 }
 
+func parseInt64Param(r *http.Request, name string) (int64, error) {
+	s := chi.URLParam(r, name)
+	return strconv.ParseInt(s, 10, 64)
+}
+
+// GetCurrent handles GET /elections/current
 func (h *Handler) GetCurrent(w http.ResponseWriter, r *http.Request) {
-	election, err := h.service.GetCurrent(r.Context())
+	ctx := r.Context()
+
+	dto, err := h.svc.GetCurrentElection(ctx)
 	if err != nil {
-		response.NotFound(w, "No active election found")
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Tidak ada pemilu yang sedang berlangsung.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 		return
 	}
 
-	response.Success(w, http.StatusOK, election)
+	response.JSON(w, http.StatusOK, dto)
 }
 
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	
-	electionID, err := strconv.ParseInt(id, 10, 64)
-	if err != nil {
-		response.BadRequest(w, "Invalid election ID", nil)
+// GetMeStatus handles GET /elections/{id}/me/status
+func (h *Handler) GetMeStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
 		return
 	}
 
-	election, err := h.service.GetByID(r.Context(), electionID)
-	if err != nil {
-		response.NotFound(w, "Election not found")
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
 		return
 	}
 
-	response.Success(w, http.StatusOK, election)
+	dto, err := h.svc.GetMeStatus(ctx, authUser, electionID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrUnauthorizedRole):
+			response.Forbidden(w, "FORBIDDEN", "Hanya mahasiswa yang dapat mengakses status pemilih.")
+			return
+		case errors.Is(err, ErrVoterMappingMissing):
+			response.Forbidden(w, "VOTER_MAPPING_MISSING", "Akun ini belum terhubung dengan data pemilih.")
+			return
+		case errors.Is(err, ErrElectionNotFound):
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
+			return
+		}
+	}
+
+	response.JSON(w, http.StatusOK, dto)
 }
