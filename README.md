@@ -133,9 +133,46 @@ make sqlc-generate
 
 ## API Endpoints
 
+### Public
 - `GET /health` - Health check
 - `GET /metrics` - Prometheus metrics
 - `GET /api/v1/` - API version info
+- `GET /api/v1/elections/current` - Get current active election
+
+### Authentication
+- `POST /api/v1/auth/login` - Login
+- `POST /api/v1/auth/refresh` - Refresh access token
+- `GET /api/v1/auth/me` - Get current user (protected)
+- `POST /api/v1/auth/logout` - Logout (protected)
+
+### Elections (Protected)
+- `GET /api/v1/elections/{id}/me/status` - Get voter status for election
+
+### Voting (Student Only)
+- `POST /api/v1/voting/online/cast` - Cast online vote
+- `POST /api/v1/voting/tps/cast` - Cast TPS vote
+- `GET /api/v1/voting/tps/status` - Get TPS voting status
+- `GET /api/v1/voting/receipt` - Get voting receipt
+
+### Admin - Election Management
+- `GET /api/v1/admin/elections` - List elections
+- `POST /api/v1/admin/elections` - Create election
+- `GET /api/v1/admin/elections/{id}` - Get election detail
+- `PUT /api/v1/admin/elections/{id}` - Update election
+- `POST /api/v1/admin/elections/{id}/open-voting` - Open voting
+- `POST /api/v1/admin/elections/{id}/close-voting` - Close voting
+
+### Admin - DPT Management
+- `POST /api/v1/admin/elections/{id}/voters/import` - Import voters
+- `GET /api/v1/admin/elections/{id}/voters` - List voters
+- `GET /api/v1/admin/elections/{id}/voters/export` - Export voters
+
+## Documentation
+
+- [Admin Election API](./ADMIN_ELECTION_API.md) - Election management endpoints
+- [DPT API](./DPT_API_DOCUMENTATION.md) - DPT management endpoints
+- [Voting API](./VOTING_API_IMPLEMENTATION.md) - Voting system implementation
+- [Auth Implementation](./AUTH_IMPLEMENTATION.md) - Authentication & authorization
 
 ## License
 
