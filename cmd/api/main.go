@@ -15,6 +15,7 @@ import (
 
 	"pemira-api/internal/auth"
 	"pemira-api/internal/config"
+	"pemira-api/internal/dpt"
 	"pemira-api/internal/election"
 	"pemira-api/internal/http/response"
 	httpMiddleware "pemira-api/internal/http/middleware"
@@ -46,6 +47,7 @@ func main() {
 	// Initialize repositories
 	authRepo := auth.NewAuthRepository(pool)
 	electionRepo := election.NewRepository(pool)
+	dptRepo := dpt.NewRepository(pool)
 	
 	voterRepo := voting.NewVoterRepository()
 	candidateRepo := voting.NewCandidateRepository()
@@ -56,6 +58,7 @@ func main() {
 	// Initialize services
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	authService := auth.NewAuthService(authRepo, jwtManager)
+	dptService := dpt.NewService(dptRepo)
 	
 	votingService := voting.NewVotingService(
 		pool,
@@ -70,6 +73,7 @@ func main() {
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	votingHandler := voting.NewVotingHandler(votingService)
+	dptHandler := dpt.NewHandler(dptService)
 	
 	logger.Info("services initialized successfully")
 
@@ -121,6 +125,18 @@ func main() {
 				r.Post("/voting/tps/cast", votingHandler.CastTPSVote)
 				r.Get("/voting/tps/status", votingHandler.GetTPSVotingStatus)
 				r.Get("/voting/receipt", votingHandler.GetVotingReceipt)
+			})
+
+			// Admin routes
+			r.Group(func(r chi.Router) {
+				r.Use(httpMiddleware.AuthAdminOnly(jwtManager))
+
+				// DPT management
+				r.Route("/admin/elections/{electionID}", func(r chi.Router) {
+					r.Post("/voters/import", dptHandler.Import)
+					r.Get("/voters", dptHandler.List)
+					r.Get("/voters/export", dptHandler.Export)
+				})
 			})
 		})
 	})
