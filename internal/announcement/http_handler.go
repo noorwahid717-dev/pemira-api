@@ -45,7 +45,7 @@ func (h *Handler) ListPublished(w http.ResponseWriter, r *http.Request) {
 	params := shared.NewPaginationParams(page, perPage)
 	announcements, total, err := h.service.ListPublished(r.Context(), electionID, params)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch announcements")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch announcements")
 		return
 	}
 
@@ -55,13 +55,13 @@ func (h *Handler) ListPublished(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid announcement ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid announcement ID")
 		return
 	}
 
 	announcement, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
-		response.NotFound(w, "Announcement not found")
+		response.NotFound(w, "NOT_FOUND", "Announcement not found")
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateAnnouncementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 
@@ -93,7 +93,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.Create(r.Context(), announcement); err != nil {
-		response.InternalServerError(w, "Failed to create announcement")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to create announcement")
 		return
 	}
 
@@ -103,13 +103,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid announcement ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid announcement ID")
 		return
 	}
 
 	var req UpdateAnnouncementRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	announcement, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
-		response.NotFound(w, "Announcement not found")
+		response.NotFound(w, "NOT_FOUND", "Announcement not found")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	announcement.IsPublished = req.IsPublished
 
 	if err := h.service.Update(r.Context(), announcement); err != nil {
-		response.InternalServerError(w, "Failed to update announcement")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to update announcement")
 		return
 	}
 
@@ -141,12 +141,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid announcement ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid announcement ID")
 		return
 	}
 
 	if err := h.service.repo.Delete(r.Context(), id); err != nil {
-		response.InternalServerError(w, "Failed to delete announcement")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to delete announcement")
 		return
 	}
 
@@ -156,12 +156,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid announcement ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid announcement ID")
 		return
 	}
 
 	if err := h.service.Publish(r.Context(), id); err != nil {
-		response.InternalServerError(w, "Failed to publish announcement")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to publish announcement")
 		return
 	}
 

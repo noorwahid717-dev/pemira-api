@@ -40,7 +40,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	
 	logs, total, err := h.service.repo.List(r.Context(), params, filters)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch audit logs")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch audit logs")
 		return
 	}
 
@@ -50,13 +50,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid audit log ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid audit log ID")
 		return
 	}
 
 	log, err := h.service.repo.GetByID(r.Context(), id)
 	if err != nil {
-		response.NotFound(w, "Audit log not found")
+		response.NotFound(w, "NOT_FOUND", "Audit log not found")
 		return
 	}
 

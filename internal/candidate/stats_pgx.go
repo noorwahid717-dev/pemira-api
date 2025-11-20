@@ -16,52 +16,52 @@ SELECT
     ) AS percentage
 FROM candidates c
 LEFT JOIN votes v ON v.candidate_id = c.id AND v.election_id = $1
-WHERE c.election_id = $1 AND c.is_active = TRUE
+WHERE c.election_id = $1 AND c.status = 'APPROVED'
 GROUP BY c.id
-ORDER BY total_votes DESC, c.order_number ASC
+ORDER BY total_votes DESC, c.number ASC
 `
 
 // PgStatsProvider implements StatsProvider using PostgreSQL
 type PgStatsProvider struct {
-db *pgxpool.Pool
+	db *pgxpool.Pool
 }
 
 // NewPgStatsProvider creates a new PostgreSQL stats provider
 func NewPgStatsProvider(db *pgxpool.Pool) *PgStatsProvider {
-return &PgStatsProvider{db: db}
+	return &PgStatsProvider{db: db}
 }
 
 // GetCandidateStats returns voting statistics for all candidates in an election
 func (p *PgStatsProvider) GetCandidateStats(
-ctx context.Context,
-electionID int64,
+	ctx context.Context,
+	electionID int64,
 ) (CandidateStatsMap, error) {
-rows, err := p.db.Query(ctx, qCandidateStats, electionID)
-if err != nil {
-return nil, err
-}
-defer rows.Close()
+	rows, err := p.db.Query(ctx, qCandidateStats, electionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
-statsMap := make(CandidateStatsMap)
+	statsMap := make(CandidateStatsMap)
 
-for rows.Next() {
-var candidateID int64
-var totalVotes int64
-var percentage float64
+	for rows.Next() {
+		var candidateID int64
+		var totalVotes int64
+		var percentage float64
 
-if err := rows.Scan(&candidateID, &totalVotes, &percentage); err != nil {
-return nil, err
-}
+		if err := rows.Scan(&candidateID, &totalVotes, &percentage); err != nil {
+			return nil, err
+		}
 
-statsMap[candidateID] = CandidateStats{
-TotalVotes: totalVotes,
-Percentage: percentage,
-}
-}
+		statsMap[candidateID] = CandidateStats{
+			TotalVotes: totalVotes,
+			Percentage: percentage,
+		}
+	}
 
-if err := rows.Err(); err != nil {
-return nil, err
-}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-return statsMap, nil
+	return statsMap, nil
 }

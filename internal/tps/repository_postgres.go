@@ -202,7 +202,7 @@ func (r *PostgresRepository) CreateQR(ctx context.Context, qr *TPSQR) error {
 	`
 	
 	return r.db.QueryRowContext(ctx, query,
-		qr.TPSID, qr.QRSecretSuffix, qr.IsActive,
+		qr.TPSID, qr.QRToken, qr.IsActive,
 	).Scan(&qr.ID, &qr.CreatedAt)
 }
 
@@ -217,8 +217,8 @@ func (r *PostgresRepository) GetActiveQR(ctx context.Context, tpsID int64) (*TPS
 	
 	var qr TPSQR
 	err := r.db.QueryRowContext(ctx, query, tpsID).Scan(
-		&qr.ID, &qr.TPSID, &qr.QRSecretSuffix, &qr.IsActive,
-		&qr.RevokedAt, &qr.CreatedAt,
+		&qr.ID, &qr.TPSID, &qr.QRToken, &qr.IsActive,
+		&qr.RotatedAt, &qr.CreatedAt,
 	)
 	
 	if err == sql.ErrNoRows {
@@ -240,8 +240,8 @@ func (r *PostgresRepository) GetQRBySecret(ctx context.Context, tpsCode, secret 
 	
 	var qr TPSQR
 	err := r.db.QueryRowContext(ctx, query, tpsCode, secret).Scan(
-		&qr.ID, &qr.TPSID, &qr.QRSecretSuffix, &qr.IsActive,
-		&qr.RevokedAt, &qr.CreatedAt,
+		&qr.ID, &qr.TPSID, &qr.QRToken, &qr.IsActive,
+		&qr.RotatedAt, &qr.CreatedAt,
 	)
 	
 	if err == sql.ErrNoRows {

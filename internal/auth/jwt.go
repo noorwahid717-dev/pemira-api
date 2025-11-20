@@ -46,6 +46,12 @@ func (j *JWTManager) GenerateAccessToken(user *UserAccount) (string, error) {
 	if user.TPSID != nil {
 		claims["tps_id"] = *user.TPSID
 	}
+	if user.LecturerID != nil {
+		claims["lecturer_id"] = *user.LecturerID
+	}
+	if user.StaffID != nil {
+		claims["staff_id"] = *user.StaffID
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(j.config.Secret))
@@ -113,6 +119,16 @@ func (j *JWTManager) ValidateAccessToken(tokenString string) (*JWTClaims, error)
 	if tpsID, ok := claims["tps_id"].(float64); ok {
 		tid := int64(tpsID)
 		jwtClaims.TPSID = &tid
+	}
+
+	if lecturerID, ok := claims["lecturer_id"].(float64); ok {
+		lid := int64(lecturerID)
+		jwtClaims.LecturerID = &lid
+	}
+
+	if staffID, ok := claims["staff_id"].(float64); ok {
+		sid := int64(staffID)
+		jwtClaims.StaffID = &sid
 	}
 
 	return jwtClaims, nil

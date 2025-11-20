@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -82,7 +85,7 @@ func (h *AdminHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	electionID, err := parseInt64Param(r, "electionID")
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "electionID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
 		return
 	}
 
@@ -121,19 +124,19 @@ func (h *AdminHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	electionID, err := parseInt64Param(r, "electionID")
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "electionID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
 		return
 	}
 
 	var req AdminCreateCandidateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Body tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Body tidak valid.")
 		return
 	}
 
 	// Validasi minimal
 	if req.Number <= 0 || req.Name == "" {
-		response.UnprocessableEntity(w, "number dan name wajib diisi.", nil)
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "number dan name wajib diisi.")
 		return
 	}
 
@@ -152,18 +155,18 @@ func (h *AdminHandler) Detail(w http.ResponseWriter, r *http.Request) {
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
 	electionIDParam := r.URL.Query().Get("election_id")
 	if electionIDParam == "" {
-		response.BadRequest(w, "election_id wajib diisi.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
 		return
 	}
 	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "election_id tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -182,24 +185,24 @@ func (h *AdminHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
 	electionIDParam := r.URL.Query().Get("election_id")
 	if electionIDParam == "" {
-		response.BadRequest(w, "election_id wajib diisi.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
 		return
 	}
 	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "election_id tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
 	var req AdminUpdateCandidateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Body tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Body tidak valid.")
 		return
 	}
 
@@ -218,18 +221,18 @@ func (h *AdminHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
 	electionIDParam := r.URL.Query().Get("election_id")
 	if electionIDParam == "" {
-		response.BadRequest(w, "election_id wajib diisi.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
 		return
 	}
 	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "election_id tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -247,18 +250,18 @@ func (h *AdminHandler) Publish(w http.ResponseWriter, r *http.Request) {
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
 	electionIDParam := r.URL.Query().Get("election_id")
 	if electionIDParam == "" {
-		response.BadRequest(w, "election_id wajib diisi.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
 		return
 	}
 	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "election_id tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -277,18 +280,18 @@ func (h *AdminHandler) Unpublish(w http.ResponseWriter, r *http.Request) {
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
 	electionIDParam := r.URL.Query().Get("election_id")
 	if electionIDParam == "" {
-		response.BadRequest(w, "election_id wajib diisi.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
 		return
 	}
 	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "election_id tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -311,19 +314,25 @@ func parseInt64Param(r *http.Request, name string) (int64, error) {
 func (h *AdminHandler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrElectionNotFound):
-		response.NotFound(w, "Pemilu tidak ditemukan.")
+		response.NotFound(w, "NOT_FOUND", "Pemilu tidak ditemukan.")
 
 	case errors.Is(err, ErrCandidateNotFound):
-		response.NotFound(w, "Kandidat tidak ditemukan.")
+		response.NotFound(w, "NOT_FOUND", "Kandidat tidak ditemukan.")
 
 	case errors.Is(err, ErrCandidateNumberTaken):
 		response.Conflict(w, "CANDIDATE_NUMBER_TAKEN", "Nomor kandidat sudah digunakan di pemilu ini.")
 
 	case errors.Is(err, ErrCandidateStatusInvalid):
-		response.BadRequest(w, "Perubahan status kandidat tidak diizinkan.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Perubahan status kandidat tidak diizinkan.")
 
 	default:
 		// TODO: log internal error dengan logger
-		response.InternalServerError(w, "Terjadi kesalahan pada sistem.")
+		log.Printf("INTERNAL_ERROR in candidate handler: %v", err)
+		// Also log to file for debugging
+		if f, ferr := os.OpenFile("/tmp/handler_error.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); ferr == nil {
+			defer f.Close()
+			f.WriteString(fmt.Sprintf("INTERNAL_ERROR in candidate handler: %v\n", err))
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

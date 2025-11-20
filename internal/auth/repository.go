@@ -6,9 +6,12 @@ import (
 )
 
 var (
-	ErrUserNotFound     = errors.New("user not found")
-	ErrSessionNotFound  = errors.New("session not found")
-	ErrUsernameExists   = errors.New("username already exists")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrUsernameExists  = errors.New("username already exists")
+	ErrNIMExists       = errors.New("nim already exists")
+	ErrNIDNExists      = errors.New("nidn already exists")
+	ErrNIPExists       = errors.New("nip already exists")
 )
 
 type Repository interface {
@@ -26,4 +29,12 @@ type Repository interface {
 	RevokeSession(ctx context.Context, sessionID int64) error
 	RevokeAllUserSessions(ctx context.Context, userID int64) error
 	CleanupExpiredSessions(ctx context.Context) error
+
+	// Registration helpers
+	CreateVoter(ctx context.Context, voter VoterRegistration) (int64, error)
+	DeleteVoter(ctx context.Context, voterID int64) error
+	CreateLecturer(ctx context.Context, lecturer LecturerRegistration) (int64, error)
+	DeleteLecturer(ctx context.Context, lecturerID int64) error
+	CreateStaff(ctx context.Context, staff StaffRegistration) (int64, error)
+	DeleteStaff(ctx context.Context, staffID int64) error
 }

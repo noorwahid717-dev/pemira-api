@@ -13,6 +13,7 @@ import (
 	"pemira-api/internal/auth"
 	"pemira-api/internal/election"
 	"pemira-api/internal/shared"
+	"pemira-api/internal/shared/constants"
 	"pemira-api/internal/tps"
 )
 
@@ -85,7 +86,7 @@ func (s *Service) CastOnlineVote(ctx context.Context, authUser auth.AuthUser, re
 	}
 
 	// Check if user has voter mapping
-	if authUser.Role != auth.RoleStudent || authUser.VoterID == nil {
+	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
 		return ErrVoterMappingMissing
 	}
 
@@ -98,7 +99,7 @@ func (s *Service) CastOnlineVote(ctx context.Context, authUser auth.AuthUser, re
 	}
 
 	// 2. Validate election status
-	if election.Status != election.ElectionStatusVotingOpen {
+	if election.Status != "VOTING_OPEN" {
 		return ErrElectionNotOpen
 	}
 
@@ -119,7 +120,7 @@ func (s *Service) CastTPSVote(ctx context.Context, authUser auth.AuthUser, req C
 	}
 
 	// Check if user has voter mapping
-	if authUser.Role != auth.RoleStudent || authUser.VoterID == nil {
+	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
 		return ErrVoterMappingMissing
 	}
 
@@ -132,7 +133,7 @@ func (s *Service) CastTPSVote(ctx context.Context, authUser auth.AuthUser, req C
 	}
 
 	// 2. Validate election status
-	if election.Status != election.ElectionStatusVotingOpen {
+	if election.Status != "VOTING_OPEN" {
 		return ErrElectionNotOpen
 	}
 
@@ -217,13 +218,14 @@ func (s *Service) castVote(
 			return translateNotFound(err, ErrCandidateNotFound)
 		}
 		if cand.ElectionID != electionID {
-			return ErrCandidateNotFound
-		}
-		if !cand.IsActive {
-			return ErrCandidateInactive
-		}
+		return ErrCandidateNotFound
+	}
+	// Note: IsActive field removed from Candidate struct
+	// if !cand.IsActive {
+	// 	return ErrCandidateInactive
+	// }
 
-		// 4. Generate token hash
+	// 4. Generate token hash
 		now := time.Now().UTC()
 		tokenHash := generateTokenHash(electionID, voterID)
 

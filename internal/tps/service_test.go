@@ -53,7 +53,7 @@ func TestService_ScanQR_ValidQR(t *testing.T) {
 			{
 				ID:             1,
 				TPSID:          1,
-				QRSecretSuffix: "abc123",
+				QRToken: "abc123",
 				IsActive:       true,
 			},
 		},

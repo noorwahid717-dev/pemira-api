@@ -11,14 +11,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"pemira-api/internal/auth"
+	"pemira-api/internal/candidate"
 	"pemira-api/internal/config"
 	"pemira-api/internal/dpt"
 	"pemira-api/internal/election"
-	"pemira-api/internal/http/response"
 	httpMiddleware "pemira-api/internal/http/middleware"
+	"pemira-api/internal/http/response"
 	"pemira-api/internal/tps"
 	"pemira-api/internal/voting"
 	"pemira-api/internal/ws"
@@ -46,12 +48,14 @@ func main() {
 	logger.Info("connected to database")
 
 	// Initialize repositories
-	authRepo := auth.NewAuthRepository(pool)
+	authRepo := auth.NewPgRepository(pool)
 	electionRepo := election.NewRepository(pool)
 	electionAdminRepo := election.NewPgAdminRepository(pool)
 	dptRepo := dpt.NewRepository(pool)
 	tpsAdminRepo := tps.NewPgAdminRepository(pool)
-	
+	candidatePgRepo := candidate.NewPgCandidateRepository(pool)
+	candidateStatsProvider := candidate.NewPgStatsProvider(pool)
+
 	voterRepo := voting.NewVoterRepository()
 	candidateRepo := voting.NewCandidateRepository()
 	voteRepo := voting.NewVoteRepository()
@@ -59,13 +63,20 @@ func main() {
 	auditSvc := voting.NewAuditService()
 
 	// Initialize services
-	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
-	authService := auth.NewAuthService(authRepo, jwtManager)
+	jwtConfig := auth.JWTConfig{
+		Secret:          cfg.JWTSecret,
+		AccessTokenTTL:  24 * time.Hour,
+		RefreshTokenTTL: 7 * 24 * time.Hour,
+	}
+	jwtManager := auth.NewJWTManager(jwtConfig)
+	authService := auth.NewAuthService(authRepo, jwtManager, jwtConfig)
 	electionService := election.NewService(electionRepo)
 	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
 	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
-	
+	candidateService := candidate.NewService(candidatePgRepo, candidateStatsProvider)
+	candidateHandler := candidate.NewHandler(candidateService)
+
 	votingService := voting.NewVotingService(
 		pool,
 		electionRepo,
@@ -83,13 +94,24 @@ func main() {
 	votingHandler := voting.NewVotingHandler(votingService)
 	dptHandler := dpt.NewHandler(dptService)
 	tpsAdminHandler := tps.NewAdminHandler(tpsAdminService)
-	
+	candidateAdminHandler := candidate.NewAdminHandler(candidateService)
+
 	logger.Info("services initialized successfully")
 
 	hub := ws.NewHub()
 	go hub.Run(ctx)
 
 	r := chi.NewRouter()
+
+	// CORS middleware
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -116,16 +138,20 @@ func main() {
 		})
 
 		// Auth routes (public)
+		r.Post("/auth/register/student", authHandler.RegisterStudent)
+		r.Post("/auth/register/lecturer-staff", authHandler.RegisterLecturerStaff)
 		r.Post("/auth/login", authHandler.Login)
 		r.Post("/auth/refresh", authHandler.RefreshToken)
 
 		// Public election routes
 		r.Get("/elections/current", electionHandler.GetCurrent)
+		r.Get("/elections/{electionID}/candidates", candidateHandler.ListPublic)
+		r.Get("/elections/{electionID}/candidates/{candidateID}", candidateHandler.DetailPublic)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(httpMiddleware.JWTAuth(jwtManager))
-			
+
 			// Auth protected
 			r.Get("/auth/me", authHandler.Me)
 			r.Post("/auth/logout", authHandler.Logout)
@@ -154,6 +180,17 @@ func main() {
 					r.Put("/{electionID}", electionAdminHandler.Update)
 					r.Post("/{electionID}/open-voting", electionAdminHandler.OpenVoting)
 					r.Post("/{electionID}/close-voting", electionAdminHandler.CloseVoting)
+
+					// Candidate management
+					r.Route("/{electionID}/candidates", func(r chi.Router) {
+						r.Get("/", candidateAdminHandler.List)
+						r.Post("/", candidateAdminHandler.Create)
+						r.Get("/{candidateID}", candidateAdminHandler.Detail)
+						r.Put("/{candidateID}", candidateAdminHandler.Update)
+						r.Delete("/{candidateID}", candidateAdminHandler.Delete)
+						r.Post("/{candidateID}/publish", candidateAdminHandler.Publish)
+						r.Post("/{candidateID}/unpublish", candidateAdminHandler.Unpublish)
+					})
 
 					// DPT management
 					r.Post("/{electionID}/voters/import", dptHandler.Import)

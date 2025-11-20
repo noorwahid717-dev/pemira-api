@@ -24,7 +24,7 @@ func (h *Handler) ListPublic(w http.ResponseWriter, r *http.Request) {
 
 	electionID, err := parseIDParam(r, "electionID")
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "electionID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
 		return
 	}
 
@@ -56,13 +56,13 @@ func (h *Handler) DetailPublic(w http.ResponseWriter, r *http.Request) {
 
 	electionID, err := parseIDParam(r, "electionID")
 	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "electionID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
 		return
 	}
 
 	candidateID, err := parseIDParam(r, "candidateID")
 	if err != nil || candidateID <= 0 {
-		response.BadRequest(w, "candidateID tidak valid.", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
 
@@ -98,14 +98,14 @@ func parseIntQuery(r *http.Request, key string, def int) int {
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrCandidateNotFound):
-		response.NotFound(w, "Kandidat tidak ditemukan untuk pemilu ini.")
+		response.NotFound(w, "NOT_FOUND", "Kandidat tidak ditemukan untuk pemilu ini.")
 
 	case errors.Is(err, ErrCandidateNotPublished):
 		// Dari sisi mahasiswa, diperlakukan sama seperti not found
-		response.NotFound(w, "Kandidat tidak ditemukan untuk pemilu ini.")
+		response.NotFound(w, "NOT_FOUND", "Kandidat tidak ditemukan untuk pemilu ini.")
 
 	default:
 		// TODO: log internal error dengan logger
-		response.InternalServerError(w, "Terjadi kesalahan pada sistem.")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

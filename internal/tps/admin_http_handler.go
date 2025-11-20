@@ -33,7 +33,9 @@ func (h *AdminHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, items)
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"items": items,
+	})
 }
 
 // Create handles POST /admin/tps

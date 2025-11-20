@@ -362,7 +362,7 @@ func (s *CheckinService) findActiveQRByCodeAndSecret(ctx context.Context, tx pgx
 
 	var qr TPSQR
 	err := tx.QueryRow(ctx, query, tpsCode, secret).Scan(
-		&qr.ID, &qr.TPSID, &qr.QRSecretSuffix, &qr.IsActive, &qr.RevokedAt, &qr.CreatedAt,
+		&qr.ID, &qr.TPSID, &qr.QRToken, &qr.IsActive, &qr.RotatedAt, &qr.CreatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
