@@ -1,3 +1,4 @@
+-- +goose Down
 -- Drop triggers
 DROP TRIGGER IF EXISTS update_candidates_updated_at ON candidates;
 DROP TRIGGER IF EXISTS update_user_accounts_updated_at ON user_accounts;
