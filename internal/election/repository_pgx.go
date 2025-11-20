@@ -17,6 +17,10 @@ func NewPgRepository(db *pgxpool.Pool) *PgRepository {
 	return &PgRepository{db: db}
 }
 
+func NewRepository(db *pgxpool.Pool) Repository {
+	return NewPgRepository(db)
+}
+
 var (
 	ErrElectionNotFound    = fmt.Errorf("election not found")
 	ErrVoterStatusNotFound = fmt.Errorf("voter status not found")

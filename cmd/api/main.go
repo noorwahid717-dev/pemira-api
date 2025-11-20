@@ -47,6 +47,7 @@ func main() {
 	// Initialize repositories
 	authRepo := auth.NewAuthRepository(pool)
 	electionRepo := election.NewRepository(pool)
+	electionAdminRepo := election.NewPgAdminRepository(pool)
 	dptRepo := dpt.NewRepository(pool)
 	
 	voterRepo := voting.NewVoterRepository()
@@ -58,6 +59,8 @@ func main() {
 	// Initialize services
 	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
 	authService := auth.NewAuthService(authRepo, jwtManager)
+	electionService := election.NewService(electionRepo)
+	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
 	
 	votingService := voting.NewVotingService(
@@ -72,6 +75,8 @@ func main() {
 
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
+	electionHandler := election.NewHandler(electionService)
+	electionAdminHandler := election.NewAdminHandler(electionAdminService)
 	votingHandler := voting.NewVotingHandler(votingService)
 	dptHandler := dpt.NewHandler(dptService)
 	
@@ -110,6 +115,9 @@ func main() {
 		r.Post("/auth/login", authHandler.Login)
 		r.Post("/auth/refresh", authHandler.RefreshToken)
 
+		// Public election routes
+		r.Get("/elections/current", electionHandler.GetCurrent)
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(httpMiddleware.JWTAuth(jwtManager))
@@ -117,6 +125,9 @@ func main() {
 			// Auth protected
 			r.Get("/auth/me", authHandler.Me)
 			r.Post("/auth/logout", authHandler.Logout)
+
+			// Election routes (authenticated)
+			r.Get("/elections/{electionID}/me/status", electionHandler.GetMeStatus)
 
 			// Voting routes (student only)
 			r.Group(func(r chi.Router) {
@@ -131,11 +142,19 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(httpMiddleware.AuthAdminOnly(jwtManager))
 
-				// DPT management
-				r.Route("/admin/elections/{electionID}", func(r chi.Router) {
-					r.Post("/voters/import", dptHandler.Import)
-					r.Get("/voters", dptHandler.List)
-					r.Get("/voters/export", dptHandler.Export)
+				// Election management
+				r.Route("/admin/elections", func(r chi.Router) {
+					r.Get("/", electionAdminHandler.List)
+					r.Post("/", electionAdminHandler.Create)
+					r.Get("/{electionID}", electionAdminHandler.Get)
+					r.Put("/{electionID}", electionAdminHandler.Update)
+					r.Post("/{electionID}/open-voting", electionAdminHandler.OpenVoting)
+					r.Post("/{electionID}/close-voting", electionAdminHandler.CloseVoting)
+
+					// DPT management
+					r.Post("/{electionID}/voters/import", dptHandler.Import)
+					r.Get("/{electionID}/voters", dptHandler.List)
+					r.Get("/{electionID}/voters/export", dptHandler.Export)
 				})
 			})
 		})
