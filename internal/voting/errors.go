@@ -14,6 +14,7 @@ var (
 	ErrTPSCheckinNotApproved  = errors.New("TPS check-in not approved")
 	ErrCheckinExpired         = errors.New("TPS check-in has expired")
 	ErrTPSNotFound            = errors.New("TPS not found")
+	ErrVoterMappingMissing    = errors.New("voter mapping missing")
 )
 
 func translateNotFound(err error, customErr error) error {
