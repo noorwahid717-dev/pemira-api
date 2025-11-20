@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"pemira-api/internal/auth"
 	"pemira-api/internal/election"
 	"pemira-api/internal/shared"
 	"pemira-api/internal/tps"
@@ -77,79 +78,75 @@ func (s *Service) GetVotingConfig(ctx context.Context, voterID int64) (*VotingCo
 	return &VotingConfigResponse{}, nil
 }
 
-// CastOnlineVote handles online voting with full validation and transaction
-func (s *Service) CastOnlineVote(ctx context.Context, voterID, candidateID int64) (*VoteReceipt, error) {
+// CastOnlineVote handles online voting with full validation
+func (s *Service) CastOnlineVote(ctx context.Context, authUser auth.AuthUser, req CastOnlineVoteRequest) error {
 	if s.db == nil || s.electionRepo == nil {
-		return nil, errors.New("not implemented")
+		return errors.New("not implemented")
 	}
 
-	// 1. Get current election
-	election, err := s.electionRepo.GetCurrentElection(ctx)
+	// Check if user has voter mapping
+	if authUser.Role != auth.RoleStudent || authUser.VoterID == nil {
+		return ErrVoterMappingMissing
+	}
+
+	voterID := *authUser.VoterID
+
+	// 1. Get election
+	election, err := s.electionRepo.GetByID(ctx, req.ElectionID)
 	if err != nil {
-		return nil, translateNotFound(err, ErrElectionNotFound)
+		return translateNotFound(err, ErrElectionNotFound)
 	}
 
 	// 2. Validate election status
-	// TODO: Check current_phase from election table or phase schedule
-	// For now, assume election has a current_phase field or we check is_active
 	if election.Status != election.ElectionStatusVotingOpen {
-		return nil, ErrElectionNotOpen
+		return ErrElectionNotOpen
 	}
 
 	// 3. Validate online mode enabled
 	if !election.OnlineEnabled {
-		return nil, ErrMethodNotAllowed
+		return ErrMethodNotAllowed
 	}
 
 	// 4. Cast vote with transaction
-	result, err := s.castVote(ctx, election.ID, voterID, candidateID, "ONLINE", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. Convert to DTO
-	return &VoteReceipt{
-		ElectionID: result.ElectionID,
-		VoterID:    result.VoterID,
-		Method:     result.Method,
-		VotedAt:    result.VotedAt,
-		Receipt: ReceiptDetail{
-			TokenHash: result.Receipt.TokenHash,
-			Note:      "Your vote has been recorded securely",
-		},
-		TPS: result.TPS,
-	}, nil
+	_, err = s.castVote(ctx, req.ElectionID, voterID, req.CandidateID, "ONLINE", nil)
+	return err
 }
 
 // CastTPSVote handles TPS voting after check-in approval
-func (s *Service) CastTPSVote(ctx context.Context, voterID, candidateID int64) (*VoteReceipt, error) {
+func (s *Service) CastTPSVote(ctx context.Context, authUser auth.AuthUser, req CastTPSVoteRequest) error {
 	if s.db == nil || s.electionRepo == nil {
-		return nil, errors.New("not implemented")
+		return errors.New("not implemented")
 	}
 
-	// 1. Get current election
-	election, err := s.electionRepo.GetCurrentElection(ctx)
+	// Check if user has voter mapping
+	if authUser.Role != auth.RoleStudent || authUser.VoterID == nil {
+		return ErrVoterMappingMissing
+	}
+
+	voterID := *authUser.VoterID
+
+	// 1. Get election
+	election, err := s.electionRepo.GetByID(ctx, req.ElectionID)
 	if err != nil {
-		return nil, translateNotFound(err, ErrElectionNotFound)
+		return translateNotFound(err, ErrElectionNotFound)
 	}
 
 	// 2. Validate election status
 	if election.Status != election.ElectionStatusVotingOpen {
-		return nil, ErrElectionNotOpen
+		return ErrElectionNotOpen
 	}
 
 	// 3. Validate TPS mode enabled
 	if !election.TPSEnabled {
-		return nil, ErrMethodNotAllowed
+		return ErrMethodNotAllowed
 	}
 
-	// 4. Get latest approved check-in (must be done in transaction for consistency)
+	// 4. Get & validate latest approved check-in
 	var checkin *tps.TPSCheckin
-	var tpsEntry *tps.TPS
 
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		checkin, err = s.voteRepo.GetLatestApprovedCheckin(ctx, tx, election.ID, voterID)
+		checkin, err = s.voteRepo.GetLatestApprovedCheckin(ctx, tx, req.ElectionID, voterID)
 		if err != nil {
 			return translateNotFound(err, ErrTPSCheckinNotFound)
 		}
@@ -164,23 +161,22 @@ func (s *Service) CastTPSVote(ctx context.Context, voterID, candidateID int64) (
 			return ErrCheckinExpired
 		}
 
-		// Get TPS info
-		tpsEntry, err = s.voteRepo.GetTPSByID(ctx, tx, checkin.TPSID)
-		if err != nil {
-			return translateNotFound(err, ErrTPSNotFound)
+		// Validate TPS ID matches request
+		if checkin.TPSID != req.TPSID {
+			return ErrTPSNotFound
 		}
 
 		return nil
 	})
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// 5. Cast vote with TPS info
-	result, err := s.castVote(ctx, election.ID, voterID, candidateID, "TPS", &tpsEntry.ID)
+	_, err = s.castVote(ctx, req.ElectionID, voterID, req.CandidateID, "TPS", &req.TPSID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// 6. Mark check-in as used
@@ -188,18 +184,7 @@ func (s *Service) CastTPSVote(ctx context.Context, voterID, candidateID int64) (
 		return s.voteRepo.MarkCheckinUsed(ctx, tx, checkin.ID, time.Now().UTC())
 	})
 
-	// 7. Convert to DTO
-	return &VoteReceipt{
-		ElectionID: result.ElectionID,
-		VoterID:    result.VoterID,
-		Method:     result.Method,
-		VotedAt:    result.VotedAt,
-		Receipt: ReceiptDetail{
-			TokenHash: result.Receipt.TokenHash,
-			Note:      "Your vote has been recorded securely at TPS",
-		},
-		TPS: result.TPS,
-	}, nil
+	return nil
 }
 
 // castVote is the core voting logic with transaction safety

@@ -7,6 +7,17 @@ type CastVoteRequest struct {
 	CandidateID int64 `json:"candidate_id" validate:"required,min=1"`
 }
 
+type CastOnlineVoteRequest struct {
+	ElectionID  int64 `json:"election_id"`
+	CandidateID int64 `json:"candidate_id"`
+}
+
+type CastTPSVoteRequest struct {
+	ElectionID  int64 `json:"election_id"`
+	CandidateID int64 `json:"candidate_id"`
+	TPSID       int64 `json:"tps_id"`
+}
+
 // Response DTOs
 type VotingConfigResponse struct {
 	Election ElectionInfo `json:"election"`
