@@ -33,7 +33,8 @@ type VoterStatusEntity struct {
 	TPSID        *int64     `json:"tps_id"`
 	VotedAt      *time.Time `json:"voted_at"`
 	TokenHash    *string    `json:"token_hash"`
-	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 type VoteResultEntity struct {

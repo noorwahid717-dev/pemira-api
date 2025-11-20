@@ -6,7 +6,6 @@ import (
 	
 	"github.com/jackc/pgx/v5"
 	"pemira-api/internal/shared"
-	"pemira-api/internal/shared/constants"
 )
 
 type voterRepository struct{}
@@ -17,21 +16,21 @@ func NewVoterRepository() VoterRepository {
 
 func (r *voterRepository) GetStatusForUpdate(ctx context.Context, tx pgx.Tx, electionID, voterID int64) (*VoterStatusEntity, error) {
 	query := `
-		SELECT id, election_id, voter_id, has_voted, status, voted_via, tps_id, voted_at, token_hash
-		FROM voter_election_status
+		SELECT id, election_id, voter_id, is_eligible, has_voted, 
+		       voting_method, tps_id, voted_at, vote_token_hash
+		FROM voter_status
 		WHERE election_id = $1 AND voter_id = $2
 		FOR UPDATE
 	`
 	
 	var vs VoterStatusEntity
-	var status string
 	
 	err := tx.QueryRow(ctx, query, electionID, voterID).Scan(
 		&vs.ID,
 		&vs.ElectionID,
 		&vs.VoterID,
+		&vs.IsEligible,
 		&vs.HasVoted,
-		&status,
 		&vs.VotingMethod,
 		&vs.TPSID,
 		&vs.VotedAt,
@@ -45,29 +44,20 @@ func (r *voterRepository) GetStatusForUpdate(ctx context.Context, tx pgx.Tx, ele
 		return nil, fmt.Errorf("get voter status: %w", err)
 	}
 	
-	vs.Status = status
-	vs.IsEligible = (status == string(constants.VoterStatusEligible))
-	
 	return &vs, nil
 }
 
 func (r *voterRepository) UpdateStatus(ctx context.Context, tx pgx.Tx, status *VoterStatusEntity) error {
 	query := `
-		UPDATE voter_election_status
+		UPDATE voter_status
 		SET has_voted = $1,
-		    voted_via = $2,
+		    voting_method = $2,
 		    tps_id = $3,
 		    voted_at = $4,
-		    token_hash = $5,
-		    status = $6,
+		    vote_token_hash = $5,
 		    updated_at = NOW()
-		WHERE id = $7
+		WHERE id = $6
 	`
-	
-	newStatus := status.Status
-	if status.HasVoted {
-		newStatus = string(constants.VoterStatusVoted)
-	}
 	
 	_, err := tx.Exec(ctx, query,
 		status.HasVoted,
@@ -75,7 +65,6 @@ func (r *voterRepository) UpdateStatus(ctx context.Context, tx pgx.Tx, status *V
 		status.TPSID,
 		status.VotedAt,
 		status.TokenHash,
-		newStatus,
 		status.ID,
 	)
 	

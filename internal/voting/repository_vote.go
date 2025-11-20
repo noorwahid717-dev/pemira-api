@@ -41,7 +41,7 @@ func (r *voteRepository) InsertToken(ctx context.Context, tx pgx.Tx, token *Vote
 
 func (r *voteRepository) InsertVote(ctx context.Context, tx pgx.Tx, vote *Vote) error {
 	query := `
-		INSERT INTO votes (election_id, candidate_id, token_hash, voted_at, voted_via, tps_id)
+		INSERT INTO votes (election_id, candidate_id, token_hash, channel, tps_id, cast_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
@@ -50,9 +50,9 @@ func (r *voteRepository) InsertVote(ctx context.Context, tx pgx.Tx, vote *Vote) 
 		vote.ElectionID,
 		vote.CandidateID,
 		vote.TokenHash,
-		vote.CastAt,
 		vote.Channel,
 		vote.TPSID,
+		vote.CastAt,
 	).Scan(&vote.ID)
 	
 	if err != nil {
