@@ -19,6 +19,7 @@ import (
 	"pemira-api/internal/election"
 	"pemira-api/internal/http/response"
 	httpMiddleware "pemira-api/internal/http/middleware"
+	"pemira-api/internal/tps"
 	"pemira-api/internal/voting"
 	"pemira-api/internal/ws"
 	"pemira-api/pkg/database"
@@ -49,6 +50,7 @@ func main() {
 	electionRepo := election.NewRepository(pool)
 	electionAdminRepo := election.NewPgAdminRepository(pool)
 	dptRepo := dpt.NewRepository(pool)
+	tpsAdminRepo := tps.NewPgAdminRepository(pool)
 	
 	voterRepo := voting.NewVoterRepository()
 	candidateRepo := voting.NewCandidateRepository()
@@ -62,6 +64,7 @@ func main() {
 	electionService := election.NewService(electionRepo)
 	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
+	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
 	
 	votingService := voting.NewVotingService(
 		pool,
@@ -79,6 +82,7 @@ func main() {
 	electionAdminHandler := election.NewAdminHandler(electionAdminService)
 	votingHandler := voting.NewVotingHandler(votingService)
 	dptHandler := dpt.NewHandler(dptService)
+	tpsAdminHandler := tps.NewAdminHandler(tpsAdminService)
 	
 	logger.Info("services initialized successfully")
 
@@ -155,6 +159,23 @@ func main() {
 					r.Post("/{electionID}/voters/import", dptHandler.Import)
 					r.Get("/{electionID}/voters", dptHandler.List)
 					r.Get("/{electionID}/voters/export", dptHandler.Export)
+
+					// TPS monitoring per election
+					r.Get("/{electionID}/tps/monitor", tpsAdminHandler.Monitor)
+				})
+
+				// TPS management
+				r.Route("/admin/tps", func(r chi.Router) {
+					r.Get("/", tpsAdminHandler.List)
+					r.Post("/", tpsAdminHandler.Create)
+					r.Get("/{tpsID}", tpsAdminHandler.Get)
+					r.Put("/{tpsID}", tpsAdminHandler.Update)
+					r.Delete("/{tpsID}", tpsAdminHandler.Delete)
+
+					// Operator management
+					r.Get("/{tpsID}/operators", tpsAdminHandler.ListOperators)
+					r.Post("/{tpsID}/operators", tpsAdminHandler.CreateOperator)
+					r.Delete("/{tpsID}/operators/{userID}", tpsAdminHandler.RemoveOperator)
 				})
 			})
 		})
