@@ -13,8 +13,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"pemira-api/internal/auth"
 	"pemira-api/internal/config"
+	"pemira-api/internal/election"
 	"pemira-api/internal/http/response"
+	httpMiddleware "pemira-api/internal/http/middleware"
+	"pemira-api/internal/voting"
 	"pemira-api/internal/ws"
 	"pemira-api/pkg/database"
 )
@@ -38,6 +42,36 @@ func main() {
 	defer pool.Close()
 
 	logger.Info("connected to database")
+
+	// Initialize repositories
+	authRepo := auth.NewAuthRepository(pool)
+	electionRepo := election.NewRepository(pool)
+	
+	voterRepo := voting.NewVoterRepository()
+	candidateRepo := voting.NewCandidateRepository()
+	voteRepo := voting.NewVoteRepository()
+	statsRepo := voting.NewVoteStatsRepository()
+	auditSvc := voting.NewAuditService()
+
+	// Initialize services
+	jwtManager := auth.NewJWTManager(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshTTL)
+	authService := auth.NewAuthService(authRepo, jwtManager)
+	
+	votingService := voting.NewVotingService(
+		pool,
+		electionRepo,
+		voterRepo,
+		candidateRepo,
+		voteRepo,
+		statsRepo,
+		auditSvc,
+	)
+
+	// Initialize handlers
+	authHandler := auth.NewAuthHandler(authService)
+	votingHandler := voting.NewVotingHandler(votingService)
+	
+	logger.Info("services initialized successfully")
 
 	hub := ws.NewHub()
 	go hub.Run(ctx)
@@ -65,6 +99,28 @@ func main() {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 			response.Success(w, http.StatusOK, map[string]string{
 				"message": "PEMIRA API v1",
+			})
+		})
+
+		// Auth routes (public)
+		r.Post("/auth/login", authHandler.Login)
+		r.Post("/auth/refresh", authHandler.RefreshToken)
+
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			r.Use(httpMiddleware.JWTAuth(jwtManager))
+			
+			// Auth protected
+			r.Get("/auth/me", authHandler.Me)
+			r.Post("/auth/logout", authHandler.Logout)
+
+			// Voting routes (student only)
+			r.Group(func(r chi.Router) {
+				r.Use(httpMiddleware.AuthStudentOnly(jwtManager))
+				r.Post("/voting/online/cast", votingHandler.CastOnlineVote)
+				r.Post("/voting/tps/cast", votingHandler.CastTPSVote)
+				r.Get("/voting/tps/status", votingHandler.GetTPSVotingStatus)
+				r.Get("/voting/receipt", votingHandler.GetVotingReceipt)
 			})
 		})
 	})

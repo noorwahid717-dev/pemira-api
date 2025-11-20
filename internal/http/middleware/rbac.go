@@ -13,7 +13,7 @@ func RequireRole(roles ...constants.Role) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userRole, ok := r.Context().Value(ctxkeys.UserRoleKey).(constants.Role)
 			if !ok {
-				response.Forbidden(w, "No role found")
+				response.Forbidden(w, "FORBIDDEN", "No role found")
 				return
 			}
 
@@ -24,7 +24,7 @@ func RequireRole(roles ...constants.Role) func(http.Handler) http.Handler {
 				}
 			}
 
-			response.Forbidden(w, "Insufficient permissions")
+			response.Forbidden(w, "FORBIDDEN", "Insufficient permissions")
 		})
 	}
 }

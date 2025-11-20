@@ -1,14 +1,25 @@
 package candidate
 
 import (
-"context"
-_ "embed"
+	"context"
 
-"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-//go:embed ../../queries/candidate_vote_stats.sql
-var qCandidateStats string
+const qCandidateStats = `
+SELECT 
+    c.id AS candidate_id,
+    COALESCE(COUNT(v.id), 0) AS total_votes,
+    COALESCE(
+        COUNT(v.id)::FLOAT / NULLIF((SELECT COUNT(*) FROM votes WHERE election_id = $1), 0) * 100,
+        0
+    ) AS percentage
+FROM candidates c
+LEFT JOIN votes v ON v.candidate_id = c.id AND v.election_id = $1
+WHERE c.election_id = $1 AND c.is_active = TRUE
+GROUP BY c.id
+ORDER BY total_votes DESC, c.order_number ASC
+`
 
 // PgStatsProvider implements StatsProvider using PostgreSQL
 type PgStatsProvider struct {
