@@ -2,9 +2,9 @@ package election
 
 import (
 	"context"
-	"time"
-	
-	"pemira-api/internal/shared"
+	"errors"
+
+	"pemira-api/internal/auth"
 	"pemira-api/internal/shared/constants"
 )
 
@@ -16,35 +16,86 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) GetCurrent(ctx context.Context) (*Election, error) {
-	return s.repo.GetCurrent(ctx)
-}
-
-func (s *Service) GetByID(ctx context.Context, id int64) (*Election, error) {
-	return s.repo.GetByID(ctx, id)
-}
-
-func (s *Service) GetCurrentPhase(ctx context.Context, electionID int64) (*constants.ElectionPhase, error) {
-	phases, err := s.repo.GetPhases(ctx, electionID)
+func (s *Service) GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error) {
+	e, err := s.repo.GetCurrentElection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now()
-	for _, phase := range phases {
-		if now.After(phase.StartDate) && now.Before(phase.EndDate) {
-			return &phase.Phase, nil
+	return &CurrentElectionDTO{
+		ID:            e.ID,
+		Year:          e.Year,
+		Name:          e.Name,
+		Slug:          e.Slug,
+		Status:        e.Status,
+		VotingStartAt: e.VotingStartAt,
+		VotingEndAt:   e.VotingEndAt,
+		OnlineEnabled: e.OnlineEnabled,
+		TPSEnabled:    e.TPSEnabled,
+	}, nil
+}
+
+var (
+	ErrUnauthorizedRole    = errors.New("role not allowed")
+	ErrVoterMappingMissing = errors.New("voter mapping missing for user")
+)
+
+func (s *Service) GetMeStatus(
+	ctx context.Context,
+	authUser auth.AuthUser,
+	electionID int64,
+) (*MeStatusDTO, error) {
+	if authUser.Role != constants.RoleStudent {
+		return nil, ErrUnauthorizedRole
+	}
+
+	if authUser.VoterID == nil {
+		return nil, ErrVoterMappingMissing
+	}
+
+	if _, err := s.repo.GetByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+
+	row, err := s.repo.GetVoterStatus(ctx, electionID, *authUser.VoterID)
+	if err != nil {
+		if errors.Is(err, ErrVoterStatusNotFound) {
+			return &MeStatusDTO{
+				ElectionID:    electionID,
+				VoterID:       *authUser.VoterID,
+				Eligible:      false,
+				HasVoted:      false,
+				Method:        VoteMethodNone,
+				TPSID:         nil,
+				LastVoteAt:    nil,
+				OnlineAllowed: false,
+				TPSAllowed:    false,
+			}, nil
+		}
+		return nil, err
+	}
+
+	method := VoteMethodNone
+	if row.LastVoteChannel != nil {
+		switch *row.LastVoteChannel {
+		case string(VoteMethodOnline):
+			method = VoteMethodOnline
+		case string(VoteMethodTPS):
+			method = VoteMethodTPS
 		}
 	}
 
-	return nil, shared.ErrNotFound
-}
-
-func (s *Service) CanVote(ctx context.Context, electionID int64) (bool, error) {
-	phase, err := s.GetCurrentPhase(ctx, electionID)
-	if err != nil {
-		return false, err
+	dto := &MeStatusDTO{
+		ElectionID:    row.ElectionID,
+		VoterID:       row.VoterID,
+		Eligible:      row.IsEligible,
+		HasVoted:      row.HasVoted,
+		Method:        method,
+		TPSID:         row.LastTPSID,
+		LastVoteAt:    row.LastVoteAt,
+		OnlineAllowed: row.OnlineEnabled,
+		TPSAllowed:    row.TPSEnabled,
 	}
 
-	return *phase == constants.PhaseVoting, nil
+	return dto, nil
 }
