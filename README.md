@@ -167,9 +167,21 @@ make sqlc-generate
 - `GET /api/v1/admin/elections/{id}/voters` - List voters
 - `GET /api/v1/admin/elections/{id}/voters/export` - Export voters
 
+### Admin - TPS Management
+- `GET /api/v1/admin/tps` - List TPS
+- `POST /api/v1/admin/tps` - Create TPS
+- `GET /api/v1/admin/tps/{id}` - Get TPS detail
+- `PUT /api/v1/admin/tps/{id}` - Update TPS
+- `DELETE /api/v1/admin/tps/{id}` - Delete TPS
+- `GET /api/v1/admin/tps/{id}/operators` - List operators
+- `POST /api/v1/admin/tps/{id}/operators` - Create operator
+- `DELETE /api/v1/admin/tps/{id}/operators/{userID}` - Remove operator
+- `GET /api/v1/admin/elections/{id}/tps/monitor` - Monitor TPS
+
 ## Documentation
 
 - [Admin Election API](./ADMIN_ELECTION_API.md) - Election management endpoints
+- [Admin TPS API](./ADMIN_TPS_API.md) - TPS management endpoints
 - [DPT API](./DPT_API_DOCUMENTATION.md) - DPT management endpoints
 - [Voting API](./VOTING_API_IMPLEMENTATION.md) - Voting system implementation
 - [Auth Implementation](./AUTH_IMPLEMENTATION.md) - Authentication & authorization
