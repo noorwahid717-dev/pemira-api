@@ -12,8 +12,8 @@ CandidateStatusHidden    CandidateStatus = "HIDDEN"
 CandidateStatusArchived  CandidateStatus = "ARCHIVED"
 )
 
-// Candidate represents a candidate entity in the domain
-type Candidate struct {
+// CandidateDetail represents a candidate entity with full details in the domain
+type CandidateDetail struct {
 ID               int64           `json:"id"`
 ElectionID       int64           `json:"election_id"`
 Number           int             `json:"number"`
