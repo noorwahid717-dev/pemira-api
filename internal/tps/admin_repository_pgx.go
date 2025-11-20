@@ -2,6 +2,8 @@ package tps
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -25,16 +27,22 @@ func NewPgAdminRepository(db *pgxpool.Pool) *PgAdminRepository {
 func (r *PgAdminRepository) List(ctx context.Context) ([]TPSDTO, error) {
 	const q = `
 SELECT 
-    id,
-    code,
-    name,
-    location,
-    capacity_estimate,
-    CASE WHEN status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
-    created_at,
-    updated_at
-FROM tps
-ORDER BY code
+    t.id,
+    t.code,
+    t.name,
+    t.location,
+    t.capacity_estimate,
+    CASE WHEN t.status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
+    t.open_time::TEXT,
+    t.close_time::TEXT,
+    t.pic_name,
+    t.pic_phone,
+    t.notes,
+    EXISTS(SELECT 1 FROM tps_qr WHERE tps_id = t.id AND is_active = TRUE) as has_active_qr,
+    t.created_at,
+    t.updated_at
+FROM tps t
+ORDER BY t.code
 `
 	rows, err := r.db.Query(ctx, q)
 	if err != nil {
@@ -52,6 +60,12 @@ ORDER BY code
 			&t.Location,
 			&t.Capacity,
 			&t.IsActive,
+			&t.OpenTime,
+			&t.CloseTime,
+			&t.PICName,
+			&t.PICPhone,
+			&t.Notes,
+			&t.HasActiveQR,
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		); err != nil {
@@ -66,16 +80,22 @@ ORDER BY code
 func (r *PgAdminRepository) GetByID(ctx context.Context, id int64) (*TPSDTO, error) {
 	const q = `
 SELECT 
-    id,
-    code,
-    name,
-    location,
-    capacity_estimate,
-    CASE WHEN status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
-    created_at,
-    updated_at
-FROM tps
-WHERE id = $1
+    t.id,
+    t.code,
+    t.name,
+    t.location,
+    t.capacity_estimate,
+    CASE WHEN t.status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
+    t.open_time::TEXT,
+    t.close_time::TEXT,
+    t.pic_name,
+    t.pic_phone,
+    t.notes,
+    EXISTS(SELECT 1 FROM tps_qr WHERE tps_id = t.id AND is_active = TRUE) as has_active_qr,
+    t.created_at,
+    t.updated_at
+FROM tps t
+WHERE t.id = $1
 `
 	var t TPSDTO
 	err := r.db.QueryRow(ctx, q, id).Scan(
@@ -85,6 +105,12 @@ WHERE id = $1
 		&t.Location,
 		&t.Capacity,
 		&t.IsActive,
+		&t.OpenTime,
+		&t.CloseTime,
+		&t.PICName,
+		&t.PICPhone,
+		&t.Notes,
+		&t.HasActiveQR,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -99,6 +125,15 @@ WHERE id = $1
 
 // Create creates new TPS
 func (r *PgAdminRepository) Create(ctx context.Context, req TPSCreateRequest) (*TPSDTO, error) {
+	openTime := "08:00"
+	if req.OpenTime != nil {
+		openTime = *req.OpenTime
+	}
+	closeTime := "17:00"
+	if req.CloseTime != nil {
+		closeTime = *req.CloseTime
+	}
+
 	const q = `
 INSERT INTO tps (
     election_id,
@@ -107,9 +142,13 @@ INSERT INTO tps (
     location,
     capacity_estimate,
     status,
+    voting_date,
     open_time,
-    close_time
-) VALUES (1, $1, $2, $3, $4, 'ACTIVE', '08:00', '17:00')
+    close_time,
+    pic_name,
+    pic_phone,
+    notes
+) VALUES (1, $1, $2, $3, $4, 'ACTIVE', CURRENT_DATE, $5::TIME, $6::TIME, $7, $8, $9)
 RETURNING 
     id,
     code,
@@ -117,6 +156,12 @@ RETURNING
     location,
     capacity_estimate,
     CASE WHEN status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
+    open_time::TEXT,
+    close_time::TEXT,
+    pic_name,
+    pic_phone,
+    notes,
+    FALSE as has_active_qr,
     created_at,
     updated_at
 `
@@ -126,6 +171,11 @@ RETURNING
 		req.Name,
 		req.Location,
 		req.Capacity,
+		openTime,
+		closeTime,
+		req.PICName,
+		req.PICPhone,
+		req.Notes,
 	).Scan(
 		&t.ID,
 		&t.Code,
@@ -133,6 +183,12 @@ RETURNING
 		&t.Location,
 		&t.Capacity,
 		&t.IsActive,
+		&t.OpenTime,
+		&t.CloseTime,
+		&t.PICName,
+		&t.PICPhone,
+		&t.Notes,
+		&t.HasActiveQR,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -182,6 +238,36 @@ func (r *PgAdminRepository) Update(ctx context.Context, id int64, req TPSUpdateR
 		argPos++
 	}
 
+	if req.OpenTime != nil {
+		updates = append(updates, fmt.Sprintf("open_time = $%d::TIME", argPos))
+		args = append(args, *req.OpenTime)
+		argPos++
+	}
+
+	if req.CloseTime != nil {
+		updates = append(updates, fmt.Sprintf("close_time = $%d::TIME", argPos))
+		args = append(args, *req.CloseTime)
+		argPos++
+	}
+
+	if req.PICName != nil {
+		updates = append(updates, fmt.Sprintf("pic_name = $%d", argPos))
+		args = append(args, *req.PICName)
+		argPos++
+	}
+
+	if req.PICPhone != nil {
+		updates = append(updates, fmt.Sprintf("pic_phone = $%d", argPos))
+		args = append(args, *req.PICPhone)
+		argPos++
+	}
+
+	if req.Notes != nil {
+		updates = append(updates, fmt.Sprintf("notes = $%d", argPos))
+		args = append(args, *req.Notes)
+		argPos++
+	}
+
 	if len(updates) == 0 {
 		return r.GetByID(ctx, id)
 	}
@@ -197,6 +283,12 @@ RETURNING
     location,
     capacity_estimate,
     CASE WHEN status = 'ACTIVE' THEN TRUE ELSE FALSE END as is_active,
+    open_time::TEXT,
+    close_time::TEXT,
+    pic_name,
+    pic_phone,
+    notes,
+    EXISTS(SELECT 1 FROM tps_qr WHERE tps_id = id AND is_active = TRUE) as has_active_qr,
     created_at,
     updated_at
 `, strings.Join(updates, ", "), argPos)
@@ -211,6 +303,12 @@ RETURNING
 		&t.Location,
 		&t.Capacity,
 		&t.IsActive,
+		&t.OpenTime,
+		&t.CloseTime,
+		&t.PICName,
+		&t.PICPhone,
+		&t.Notes,
+		&t.HasActiveQR,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -382,4 +480,152 @@ ORDER BY t.code
 		items = append(items, m)
 	}
 	return items, rows.Err()
+}
+
+// GetTPSQRMetadata returns QR metadata for TPS
+func (r *PgAdminRepository) GetTPSQRMetadata(ctx context.Context, tpsID int64) (*TPSQRMetadataResponse, error) {
+const q = `
+SELECT 
+    t.id,
+    t.code,
+    t.name,
+    qr.id,
+    qr.qr_token,
+    qr.created_at
+FROM tps t
+LEFT JOIN tps_qr qr ON qr.tps_id = t.id AND qr.is_active = TRUE
+WHERE t.id = $1
+`
+var resp TPSQRMetadataResponse
+var qrID *int64
+var qrToken *string
+var qrCreatedAt *interface{}
+
+err := r.db.QueryRow(ctx, q, tpsID).Scan(
+&resp.TPSID,
+&resp.Code,
+&resp.Name,
+&qrID,
+&qrToken,
+&qrCreatedAt,
+)
+if err != nil {
+if errors.Is(err, pgx.ErrNoRows) {
+return nil, ErrTPSNotFound
+}
+return nil, err
+}
+
+if qrID != nil && qrToken != nil {
+resp.ActiveQR = &ActiveQRDTO{
+ID:      *qrID,
+QRToken: *qrToken,
+}
+}
+
+return &resp, nil
+}
+
+// generateQRToken generates a secure random token for QR
+func generateQRToken(tpsID int64) (string, error) {
+b := make([]byte, 32)
+if _, err := rand.Read(b); err != nil {
+return "", err
+}
+token := fmt.Sprintf("tps_qr_%d_%s", tpsID, base64.URLEncoding.EncodeToString(b)[:32])
+return token, nil
+}
+
+// RotateTPSQR rotates (generates new) QR for TPS
+func (r *PgAdminRepository) RotateTPSQR(ctx context.Context, tpsID int64) (*TPSQRRotateResponse, error) {
+tx, err := r.db.Begin(ctx)
+if err != nil {
+return nil, err
+}
+defer tx.Rollback(ctx)
+
+// Verify TPS exists and get details
+const qTPS = `SELECT code, name FROM tps WHERE id = $1`
+var code, name string
+if err := tx.QueryRow(ctx, qTPS, tpsID).Scan(&code, &name); err != nil {
+if errors.Is(err, pgx.ErrNoRows) {
+return nil, ErrTPSNotFound
+}
+return nil, err
+}
+
+// Deactivate existing QR
+const qDeactivate = `
+UPDATE tps_qr 
+SET is_active = FALSE, rotated_at = NOW() 
+WHERE tps_id = $1 AND is_active = TRUE
+`
+if _, err := tx.Exec(ctx, qDeactivate, tpsID); err != nil {
+return nil, err
+}
+
+// Generate new token
+token, err := generateQRToken(tpsID)
+if err != nil {
+return nil, err
+}
+
+// Insert new QR
+const qInsert = `
+INSERT INTO tps_qr (tps_id, qr_token, is_active)
+VALUES ($1, $2, TRUE)
+RETURNING id, created_at
+`
+var newQR ActiveQRDTO
+newQR.QRToken = token
+if err := tx.QueryRow(ctx, qInsert, tpsID, token).Scan(&newQR.ID, &newQR.CreatedAt); err != nil {
+return nil, err
+}
+
+if err := tx.Commit(ctx); err != nil {
+return nil, err
+}
+
+return &TPSQRRotateResponse{
+TPSID:    tpsID,
+Code:     code,
+Name:     name,
+ActiveQR: newQR,
+}, nil
+}
+
+// GetTPSQRForPrint returns QR payload for printing
+func (r *PgAdminRepository) GetTPSQRForPrint(ctx context.Context, tpsID int64) (*TPSQRPrintResponse, error) {
+const q = `
+SELECT 
+    t.id,
+    t.code,
+    t.name,
+    qr.qr_token
+FROM tps t
+LEFT JOIN tps_qr qr ON qr.tps_id = t.id AND qr.is_active = TRUE
+WHERE t.id = $1
+`
+var resp TPSQRPrintResponse
+var qrToken *string
+
+err := r.db.QueryRow(ctx, q, tpsID).Scan(
+&resp.TPSID,
+&resp.Code,
+&resp.Name,
+&qrToken,
+)
+if err != nil {
+if errors.Is(err, pgx.ErrNoRows) {
+return nil, ErrTPSNotFound
+}
+return nil, err
+}
+
+if qrToken == nil {
+return nil, fmt.Errorf("no active QR found for TPS")
+}
+
+resp.QRPayload = fmt.Sprintf("pemira://tps-checkin?t=%s", *qrToken)
+return &resp, nil
 }

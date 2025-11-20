@@ -48,6 +48,19 @@ func (s *AdminService) RemoveOperator(ctx context.Context, tpsID, userID int64) 
 	return s.repo.RemoveOperator(ctx, tpsID, userID)
 }
 
+// QR Management
+func (s *AdminService) GetQRMetadata(ctx context.Context, tpsID int64) (*TPSQRMetadataResponse, error) {
+	return s.repo.GetTPSQRMetadata(ctx, tpsID)
+}
+
+func (s *AdminService) RotateQR(ctx context.Context, tpsID int64) (*TPSQRRotateResponse, error) {
+	return s.repo.RotateTPSQR(ctx, tpsID)
+}
+
+func (s *AdminService) GetQRForPrint(ctx context.Context, tpsID int64) (*TPSQRPrintResponse, error) {
+	return s.repo.GetTPSQRForPrint(ctx, tpsID)
+}
+
 // Monitoring
 func (s *AdminService) Monitor(ctx context.Context, electionID int64) ([]TPSMonitorDTO, error) {
 	return s.repo.ListMonitorForElection(ctx, electionID)

@@ -13,16 +13,22 @@ type CreateTPSRequest struct {
 	CloseTime        string  `json:"close_time" validate:"required"`
 	CapacityEstimate int     `json:"capacity_estimate" validate:"min=0"`
 	Status           string  `json:"status" validate:"required,oneof=DRAFT ACTIVE CLOSED"`
+	PICName          *string `json:"pic_name,omitempty"`
+	PICPhone         *string `json:"pic_phone,omitempty"`
+	Notes            *string `json:"notes,omitempty"`
 }
 
 type UpdateTPSRequest struct {
-	Name             string `json:"name" validate:"required"`
-	Location         string `json:"location" validate:"required"`
-	VotingDate       string `json:"voting_date" validate:"required"`
-	OpenTime         string `json:"open_time" validate:"required"`
-	CloseTime        string `json:"close_time" validate:"required"`
-	CapacityEstimate int    `json:"capacity_estimate" validate:"min=0"`
-	Status           string `json:"status" validate:"required,oneof=DRAFT ACTIVE CLOSED"`
+	Name             string  `json:"name" validate:"required"`
+	Location         string  `json:"location" validate:"required"`
+	VotingDate       string  `json:"voting_date" validate:"required"`
+	OpenTime         string  `json:"open_time" validate:"required"`
+	CloseTime        string  `json:"close_time" validate:"required"`
+	CapacityEstimate int     `json:"capacity_estimate" validate:"min=0"`
+	Status           string  `json:"status" validate:"required,oneof=DRAFT ACTIVE CLOSED"`
+	PICName          *string `json:"pic_name,omitempty"`
+	PICPhone         *string `json:"pic_phone,omitempty"`
+	Notes            *string `json:"notes,omitempty"`
 }
 
 type AssignPanitiaRequest struct {
@@ -40,16 +46,19 @@ type TPSListResponse struct {
 }
 
 type TPSListItem struct {
-	ID            int64  `json:"id"`
-	Code          string `json:"code"`
-	Name          string `json:"name"`
-	Location      string `json:"location"`
-	Status        string `json:"status"`
-	VotingDate    string `json:"voting_date"`
-	OpenTime      string `json:"open_time"`
-	CloseTime     string `json:"close_time"`
-	TotalVotes    int    `json:"total_votes"`
-	TotalCheckins int    `json:"total_checkins"`
+	ID            int64   `json:"id"`
+	Code          string  `json:"code"`
+	Name          string  `json:"name"`
+	Location      string  `json:"location"`
+	Status        string  `json:"status"`
+	VotingDate    string  `json:"voting_date"`
+	OpenTime      string  `json:"open_time"`
+	CloseTime     string  `json:"close_time"`
+	PICName       *string `json:"pic_name,omitempty"`
+	PICPhone      *string `json:"pic_phone,omitempty"`
+	HasActiveQR   bool    `json:"has_active_qr"`
+	TotalVotes    int     `json:"total_votes"`
+	TotalCheckins int     `json:"total_checkins"`
 }
 
 type TPSDetailResponse struct {
@@ -63,6 +72,9 @@ type TPSDetailResponse struct {
 	OpenTime         string             `json:"open_time"`
 	CloseTime        string             `json:"close_time"`
 	CapacityEstimate int                `json:"capacity_estimate"`
+	PICName          *string            `json:"pic_name,omitempty"`
+	PICPhone         *string            `json:"pic_phone,omitempty"`
+	Notes            *string            `json:"notes,omitempty"`
 	AreaFaculty      *FacultyInfo       `json:"area_faculty"`
 	QR               *QRInfo            `json:"qr"`
 	Stats            TPSStats           `json:"stats"`
@@ -75,10 +87,10 @@ type FacultyInfo struct {
 }
 
 type QRInfo struct {
-	ID              int64  `json:"id"`
-	QRSecretSuffix  string `json:"qr_secret_suffix"`
-	IsActive        bool   `json:"is_active"`
-	CreatedAt       string `json:"created_at"`
+	ID        int64  `json:"id"`
+	QRToken   string `json:"qr_token"`
+	IsActive  bool   `json:"is_active"`
+	CreatedAt string `json:"created_at"`
 }
 
 type PanitiaInfo struct {

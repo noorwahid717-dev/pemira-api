@@ -29,17 +29,20 @@ type TPS struct {
 	CloseTime        string     `json:"close_time"`
 	CapacityEstimate int        `json:"capacity_estimate"`
 	AreaFacultyID    *int64     `json:"area_faculty_id"`
+	PICName          *string    `json:"pic_name,omitempty"`
+	PICPhone         *string    `json:"pic_phone,omitempty"`
+	Notes            *string    `json:"notes,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type TPSQR struct {
-	ID              int64      `json:"id"`
-	TPSID           int64      `json:"tps_id"`
-	QRSecretSuffix  string     `json:"qr_secret_suffix"`
-	IsActive        bool       `json:"is_active"`
-	RevokedAt       *time.Time `json:"revoked_at"`
-	CreatedAt       time.Time  `json:"created_at"`
+	ID         int64      `json:"id"`
+	TPSID      int64      `json:"tps_id"`
+	QRToken    string     `json:"qr_token"`
+	IsActive   bool       `json:"is_active"`
+	RotatedAt  *time.Time `json:"rotated_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 type TPSPanitia struct {

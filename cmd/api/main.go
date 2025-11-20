@@ -172,6 +172,11 @@ func main() {
 					r.Put("/{tpsID}", tpsAdminHandler.Update)
 					r.Delete("/{tpsID}", tpsAdminHandler.Delete)
 
+					// QR management
+					r.Get("/{tpsID}/qr", tpsAdminHandler.GetQRMetadata)
+					r.Post("/{tpsID}/qr/rotate", tpsAdminHandler.RotateQR)
+					r.Get("/{tpsID}/qr/print", tpsAdminHandler.GetQRForPrint)
+
 					// Operator management
 					r.Get("/{tpsID}/operators", tpsAdminHandler.ListOperators)
 					r.Post("/{tpsID}/operators", tpsAdminHandler.CreateOperator)
