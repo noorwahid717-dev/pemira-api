@@ -3,13 +3,19 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
+
+	"pemira-api/internal/shared/constants"
 )
 
 var (
 	ErrInvalidCredentials  = errors.New("invalid username or password")
 	ErrInactiveUser        = errors.New("user account is inactive")
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
+	ErrInvalidRegisterType = errors.New("invalid registration type")
+	ErrInvalidRegistration = errors.New("invalid registration data")
 )
 
 type AuthService struct {
@@ -23,6 +29,191 @@ func NewAuthService(repo Repository, jwtManager *JWTManager, config JWTConfig) *
 		repo:       repo,
 		jwtManager: jwtManager,
 		config:     config,
+	}
+}
+
+// RegisterStudent registers a new student account and linked voter profile.
+func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRequest) (*AuthUser, error) {
+	nim := strings.TrimSpace(req.NIM)
+	name := strings.TrimSpace(req.Name)
+	if nim == "" || name == "" || strings.TrimSpace(req.Password) == "" {
+		return nil, ErrInvalidRegistration
+	}
+	if len(req.Password) < 6 {
+		return nil, ErrInvalidRegistration
+	}
+
+	email := strings.TrimSpace(req.Email)
+	if email == "" {
+		email = fmt.Sprintf("%s@pemira.ac.id", nim)
+	}
+
+	passwordHash, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	voterID, err := s.repo.CreateVoter(ctx, VoterRegistration{
+		NIM:              nim,
+		Name:             name,
+		Email:            email,
+		FacultyName:      req.FacultyName,
+		StudyProgramName: req.StudyProgramName,
+		CohortYear:       req.CohortYear,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
+		Username:     nim,
+		Email:        email,
+		FullName:     name,
+		PasswordHash: passwordHash,
+		Role:         constants.RoleStudent,
+		VoterID:      &voterID,
+		IsActive:     true,
+	})
+	if err != nil {
+		_ = s.repo.DeleteVoter(ctx, voterID)
+		return nil, err
+	}
+
+	profile := &UserProfile{
+		Name:             name,
+		FacultyName:      req.FacultyName,
+		StudyProgramName: req.StudyProgramName,
+		CohortYear:       req.CohortYear,
+	}
+
+	return &AuthUser{
+		ID:       user.ID,
+		Username: user.Username,
+		Role:     user.Role,
+		VoterID:  user.VoterID,
+		Profile:  profile,
+	}, nil
+}
+
+// RegisterLecturerStaff registers a lecturer or staff account.
+func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLecturerStaffRequest) (*AuthUser, error) {
+	roleType := strings.ToUpper(strings.TrimSpace(req.Type))
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Password) == "" {
+		return nil, ErrInvalidRegistration
+	}
+	if len(req.Password) < 6 {
+		return nil, ErrInvalidRegistration
+	}
+
+	email := strings.TrimSpace(req.Email)
+
+	passwordHash, err := HashPassword(req.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	switch roleType {
+	case "LECTURER":
+		nidn := strings.TrimSpace(req.NIDN)
+		if nidn == "" {
+			return nil, ErrInvalidRegistration
+		}
+		if email == "" {
+			email = fmt.Sprintf("%s@pemira.ac.id", nidn)
+		}
+
+		lecturerID, err := s.repo.CreateLecturer(ctx, LecturerRegistration{
+			NIDN:           nidn,
+			Name:           req.Name,
+			Email:          email,
+			FacultyName:    req.FacultyName,
+			DepartmentName: req.DepartmentName,
+			Position:       req.Position,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
+			Username:     nidn,
+			Email:        email,
+			FullName:     req.Name,
+			PasswordHash: passwordHash,
+			Role:         constants.RoleLecturer,
+			LecturerID:   &lecturerID,
+			IsActive:     true,
+		})
+		if err != nil {
+			_ = s.repo.DeleteLecturer(ctx, lecturerID)
+			return nil, err
+		}
+
+		profile := &UserProfile{
+			Name:           req.Name,
+			FacultyName:    req.FacultyName,
+			DepartmentName: req.DepartmentName,
+			Position:       req.Position,
+		}
+
+		return &AuthUser{
+			ID:         user.ID,
+			Username:   user.Username,
+			Role:       user.Role,
+			LecturerID: user.LecturerID,
+			Profile:    profile,
+		}, nil
+
+	case "STAFF":
+		nip := strings.TrimSpace(req.NIP)
+		if nip == "" {
+			return nil, ErrInvalidRegistration
+		}
+		if email == "" {
+			email = fmt.Sprintf("%s@pemira.ac.id", nip)
+		}
+
+		staffID, err := s.repo.CreateStaff(ctx, StaffRegistration{
+			NIP:      nip,
+			Name:     req.Name,
+			Email:    email,
+			UnitName: req.UnitName,
+			Position: req.Position,
+			Status:   "ACTIVE",
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
+			Username:     nip,
+			Email:        email,
+			FullName:     req.Name,
+			PasswordHash: passwordHash,
+			Role:         constants.RoleStaff,
+			StaffID:      &staffID,
+			IsActive:     true,
+		})
+		if err != nil {
+			_ = s.repo.DeleteStaff(ctx, staffID)
+			return nil, err
+		}
+
+		profile := &UserProfile{
+			Name:     req.Name,
+			UnitName: req.UnitName,
+			Position: req.Position,
+		}
+
+		return &AuthUser{
+			ID:       user.ID,
+			Username: user.Username,
+			Role:     user.Role,
+			StaffID:  user.StaffID,
+			Profile:  profile,
+		}, nil
+
+	default:
+		return nil, ErrInvalidRegisterType
 	}
 }
 
@@ -98,12 +289,14 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest, userAgent, ip
 	}
 
 	authUser := &AuthUser{
-		ID:       user.ID,
-		Username: user.Username,
-		Role:     user.Role,
-		VoterID:  user.VoterID,
-		TPSID:    user.TPSID,
-		Profile:  profile,
+		ID:         user.ID,
+		Username:   user.Username,
+		Role:       user.Role,
+		VoterID:    user.VoterID,
+		TPSID:      user.TPSID,
+		LecturerID: user.LecturerID,
+		StaffID:    user.StaffID,
+		Profile:    profile,
 	}
 
 	return &LoginResponse{

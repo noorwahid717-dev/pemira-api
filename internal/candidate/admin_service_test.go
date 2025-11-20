@@ -117,7 +117,7 @@ func TestAdminCreateCandidate(t *testing.T) {
 		MainPrograms:     []candidate.MainProgram{},
 		Media:            candidate.Media{},
 		SocialLinks:      []candidate.SocialLink{},
-		Status:           candidate.CandidateStatusDraft,
+		Status:           candidate.CandidateStatusPending,
 	}
 
 	dto, err := svc.AdminCreateCandidate(ctx, electionID, req)
@@ -157,7 +157,7 @@ func TestAdminCreateCandidateDuplicateNumber(t *testing.T) {
 		MainPrograms:     []candidate.MainProgram{},
 		Media:            candidate.Media{},
 		SocialLinks:      []candidate.SocialLink{},
-		Status:           candidate.CandidateStatusDraft,
+		Status:           candidate.CandidateStatusPending,
 	}
 
 	_, err := svc.AdminCreateCandidate(ctx, electionID, req1)
@@ -198,7 +198,7 @@ func TestAdminUpdateCandidate(t *testing.T) {
 		MainPrograms:     []candidate.MainProgram{},
 		Media:            candidate.Media{},
 		SocialLinks:      []candidate.SocialLink{},
-		Status:           candidate.CandidateStatusDraft,
+		Status:           candidate.CandidateStatusPending,
 	}
 
 	created, err := svc.AdminCreateCandidate(ctx, electionID, createReq)
@@ -245,7 +245,7 @@ func TestAdminDeleteCandidate(t *testing.T) {
 		MainPrograms:     []candidate.MainProgram{},
 		Media:            candidate.Media{},
 		SocialLinks:      []candidate.SocialLink{},
-		Status:           candidate.CandidateStatusDraft,
+		Status:           candidate.CandidateStatusPending,
 	}
 
 	created, err := svc.AdminCreateCandidate(ctx, electionID, createReq)
@@ -289,7 +289,7 @@ func TestAdminPublishUnpublish(t *testing.T) {
 		MainPrograms:     []candidate.MainProgram{},
 		Media:            candidate.Media{},
 		SocialLinks:      []candidate.SocialLink{},
-		Status:           candidate.CandidateStatusDraft,
+		Status:           candidate.CandidateStatusPending,
 	}
 
 	created, err := svc.AdminCreateCandidate(ctx, electionID, createReq)
@@ -303,8 +303,8 @@ func TestAdminPublishUnpublish(t *testing.T) {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if published.Status != string(candidate.CandidateStatusPublished) {
-		t.Errorf("expected status PUBLISHED, got %s", published.Status)
+	if published.Status != string(candidate.CandidateStatusApproved) {
+		t.Errorf("expected status APPROVED, got %s", published.Status)
 	}
 
 	// Unpublish
@@ -313,7 +313,7 @@ func TestAdminPublishUnpublish(t *testing.T) {
 		t.Fatalf("unpublish failed: %v", err)
 	}
 
-	if unpublished.Status != string(candidate.CandidateStatusHidden) {
-		t.Errorf("expected status HIDDEN, got %s", unpublished.Status)
+	if unpublished.Status != string(candidate.CandidateStatusPending) {
+		t.Errorf("expected status PENDING, got %s", unpublished.Status)
 	}
 }

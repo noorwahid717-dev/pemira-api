@@ -31,7 +31,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	params := shared.NewPaginationParams(page, perPage)
 	voters, total, err := h.service.List(r.Context(), params)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch voters")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch voters")
 		return
 	}
 
@@ -43,7 +43,7 @@ func (h *Handler) GetByNIM(w http.ResponseWriter, r *http.Request) {
 	
 	voter, err := h.service.GetByNIM(r.Context(), nim)
 	if err != nil {
-		response.NotFound(w, "Voter not found")
+		response.NotFound(w, "NOT_FOUND", "Voter not found")
 		return
 	}
 

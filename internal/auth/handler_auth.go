@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -46,6 +47,15 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ipAddress = r.RemoteAddr
 	}
 
+	// Remove port from IP address if present
+	if idx := strings.LastIndex(ipAddress, ":"); idx != -1 {
+		// Check if it's IPv6 or IPv4 with port
+		if strings.Count(ipAddress, ":") == 1 || strings.HasPrefix(ipAddress, "[") {
+			ipAddress = strings.TrimRight(strings.Split(ipAddress, ":")[0], "]")
+			ipAddress = strings.TrimLeft(ipAddress, "[")
+		}
+	}
+
 	loginResp, err := h.service.Login(r.Context(), req, userAgent, ipAddress)
 	if err != nil {
 		h.handleError(w, err)
@@ -53,6 +63,46 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, loginResp)
+}
+
+// RegisterStudent handles POST /auth/register/student
+func (h *AuthHandler) RegisterStudent(w http.ResponseWriter, r *http.Request) {
+	var req RegisterStudentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	user, err := h.service.RegisterStudent(r.Context(), req)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, map[string]interface{}{
+		"user":    user,
+		"message": "Registrasi mahasiswa berhasil.",
+	})
+}
+
+// RegisterLecturerStaff handles POST /auth/register/lecturer-staff
+func (h *AuthHandler) RegisterLecturerStaff(w http.ResponseWriter, r *http.Request) {
+	var req RegisterLecturerStaffRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	user, err := h.service.RegisterLecturerStaff(r.Context(), req)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusCreated, map[string]interface{}{
+		"user":    user,
+		"message": "Registrasi berhasil.",
+	})
 }
 
 // RefreshToken handles POST /auth/refresh
@@ -133,8 +183,27 @@ func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrUserNotFound):
 		response.NotFound(w, "USER_NOT_FOUND", "Pengguna tidak ditemukan.")
 
+	case errors.Is(err, ErrUsernameExists):
+		response.Conflict(w, "USERNAME_EXISTS", "Username sudah terdaftar.")
+
+	case errors.Is(err, ErrNIMExists):
+		response.Conflict(w, "NIM_EXISTS", "NIM sudah terdaftar.")
+
+	case errors.Is(err, ErrNIDNExists):
+		response.Conflict(w, "NIDN_EXISTS", "NIDN sudah terdaftar.")
+
+	case errors.Is(err, ErrNIPExists):
+		response.Conflict(w, "NIP_EXISTS", "NIP sudah terdaftar.")
+
+	case errors.Is(err, ErrInvalidRegisterType):
+		response.BadRequest(w, "INVALID_REQUEST", "Tipe registrasi tidak valid.")
+
+	case errors.Is(err, ErrInvalidRegistration):
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Data registrasi tidak lengkap atau tidak valid.")
+
 	default:
 		// Log internal error
+		slog.Error("auth handler error", "error", err)
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }

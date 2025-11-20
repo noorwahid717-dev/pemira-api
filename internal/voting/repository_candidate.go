@@ -24,14 +24,17 @@ func (r *candidateRepository) GetByIDWithTx(ctx context.Context, tx pgx.Tx, cand
 	
 	var c candidate.Candidate
 	
+	var visionMission string
+	var isActive bool
+	
 	err := tx.QueryRow(ctx, query, candidateID).Scan(
 		&c.ID,
 		&c.ElectionID,
-		&c.OrderNumber,
+		&c.Number,
 		&c.Name,
-		&c.VisionMission,
+		&visionMission,  // Skip this field
 		&c.PhotoURL,
-		&c.IsActive,
+		&isActive,       // Skip this field
 		&c.CreatedAt,
 		&c.UpdatedAt,
 	)

@@ -10,10 +10,14 @@ import (
 type UserAccount struct {
 	ID           int64          `json:"id"`
 	Username     string         `json:"username"`
+	Email        string         `json:"email"`
+	FullName     string         `json:"full_name"`
 	PasswordHash string         `json:"-"`
 	Role         constants.Role `json:"role"`
 	VoterID      *int64         `json:"voter_id,omitempty"`
 	TPSID        *int64         `json:"tps_id,omitempty"`
+	LecturerID   *int64         `json:"lecturer_id,omitempty"`
+	StaffID      *int64         `json:"staff_id,omitempty"`
 	IsActive     bool           `json:"is_active"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
@@ -39,24 +43,33 @@ type UserProfile struct {
 	CohortYear       *int   `json:"cohort_year,omitempty"`
 	TPSCode          string `json:"tps_code,omitempty"`
 	TPSName          string `json:"tps_name,omitempty"`
+	// For lecturers
+	DepartmentName string `json:"department_name,omitempty"`
+	Position       string `json:"position,omitempty"`
+	// For staff
+	UnitName string `json:"unit_name,omitempty"`
 }
 
 // AuthUser represents an authenticated user returned to clients.
 type AuthUser struct {
-	ID       int64          `json:"id"`
-	Username string         `json:"username"`
-	Role     constants.Role `json:"role"`
-	VoterID  *int64         `json:"voter_id,omitempty"`
-	TPSID    *int64         `json:"tps_id,omitempty"`
-	Profile  *UserProfile   `json:"profile,omitempty"`
+	ID         int64          `json:"id"`
+	Username   string         `json:"username"`
+	Role       constants.Role `json:"role"`
+	VoterID    *int64         `json:"voter_id,omitempty"`
+	TPSID      *int64         `json:"tps_id,omitempty"`
+	LecturerID *int64         `json:"lecturer_id,omitempty"`
+	StaffID    *int64         `json:"staff_id,omitempty"`
+	Profile    *UserProfile   `json:"profile,omitempty"`
 }
 
 // JWTClaims is used by JWT middleware and tokens.
 type JWTClaims struct {
-	UserID  int64          `json:"sub"`
-	Role    constants.Role `json:"role"`
-	VoterID *int64         `json:"voter_id,omitempty"`
-	TPSID   *int64         `json:"tps_id,omitempty"`
-	Exp     int64          `json:"exp"`
-	Iat     int64          `json:"iat"`
+	UserID     int64          `json:"sub"`
+	Role       constants.Role `json:"role"`
+	VoterID    *int64         `json:"voter_id,omitempty"`
+	TPSID      *int64         `json:"tps_id,omitempty"`
+	LecturerID *int64         `json:"lecturer_id,omitempty"`
+	StaffID    *int64         `json:"staff_id,omitempty"`
+	Exp        int64          `json:"exp"`
+	Iat        int64          `json:"iat"`
 }

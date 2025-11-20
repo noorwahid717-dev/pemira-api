@@ -28,7 +28,7 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 	
 	summary, err := h.service.GetDashboardSummary(r.Context(), electionID)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch summary")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch summary")
 		return
 	}
 
@@ -38,13 +38,13 @@ func (h *Handler) GetSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetLiveCount(w http.ResponseWriter, r *http.Request) {
 	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid election ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
 		return
 	}
 
 	snapshot, err := h.service.GetLiveCountSnapshot(r.Context(), electionID)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch live count")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch live count")
 		return
 	}
 
@@ -54,13 +54,13 @@ func (h *Handler) GetLiveCount(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetParticipation(w http.ResponseWriter, r *http.Request) {
 	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid election ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
 		return
 	}
 
 	participation, err := h.service.repo.GetParticipationStats(r.Context(), electionID)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch participation")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch participation")
 		return
 	}
 

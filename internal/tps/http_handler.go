@@ -84,7 +84,7 @@ func (h *Handler) AdminListTPS(w http.ResponseWriter, r *http.Request) {
 	
 	result, err := h.service.List(r.Context(), filter)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch TPS list")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch TPS list")
 		return
 	}
 	
@@ -94,7 +94,7 @@ func (h *Handler) AdminListTPS(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminGetTPS(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
@@ -111,7 +111,7 @@ func (h *Handler) AdminGetTPS(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminCreateTPS(w http.ResponseWriter, r *http.Request) {
 	var req CreateTPSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 	
@@ -137,13 +137,13 @@ func (h *Handler) AdminCreateTPS(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminUpdateTPS(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
 	var req UpdateTPSRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 	
@@ -167,13 +167,13 @@ func (h *Handler) AdminUpdateTPS(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminAssignPanitia(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
 	var req AssignPanitiaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 	
@@ -197,7 +197,7 @@ func (h *Handler) AdminAssignPanitia(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AdminRegenerateQR(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
@@ -216,13 +216,13 @@ func (h *Handler) AdminRegenerateQR(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) StudentScanQR(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
-		response.Unauthorized(w, "Unauthorized")
+		response.Unauthorized(w, "UNAUTHORIZED", "Unauthorized")
 		return
 	}
 	
 	var req ScanQRRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 	
@@ -244,7 +244,7 @@ func (h *Handler) StudentScanQR(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) StudentCheckinStatus(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
-		response.Unauthorized(w, "Unauthorized")
+		response.Unauthorized(w, "UNAUTHORIZED", "Unauthorized")
 		return
 	}
 	
@@ -255,7 +255,7 @@ func (h *Handler) StudentCheckinStatus(w http.ResponseWriter, r *http.Request) {
 	
 	result, err := h.service.GetCheckinStatus(r.Context(), userID, electionID)
 	if err != nil {
-		response.InternalServerError(w, "Failed to get check-in status")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to get check-in status")
 		return
 	}
 	
@@ -267,13 +267,13 @@ func (h *Handler) StudentCheckinStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PanelGetSummary(w http.ResponseWriter, r *http.Request) {
 	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
-		response.Unauthorized(w, "Unauthorized")
+		response.Unauthorized(w, "UNAUTHORIZED", "Unauthorized")
 		return
 	}
 	
@@ -290,7 +290,7 @@ func (h *Handler) PanelGetSummary(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
 	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
@@ -304,7 +304,7 @@ func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
 	
 	result, err := h.service.ListCheckinQueue(r.Context(), tpsID, status, page, limit)
 	if err != nil {
-		response.InternalServerError(w, "Failed to fetch check-in queue")
+		response.InternalServerError(w, "INTERNAL_ERROR", "Failed to fetch check-in queue")
 		return
 	}
 	
@@ -314,19 +314,19 @@ func (h *Handler) PanelListCheckins(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PanelApproveCheckin(w http.ResponseWriter, r *http.Request) {
 	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
 	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid check-in ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid check-in ID")
 		return
 	}
 	
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
-		response.Unauthorized(w, "Unauthorized")
+		response.Unauthorized(w, "UNAUTHORIZED", "Unauthorized")
 		return
 	}
 	
@@ -343,25 +343,25 @@ func (h *Handler) PanelApproveCheckin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PanelRejectCheckin(w http.ResponseWriter, r *http.Request) {
 	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tps_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid TPS ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
 		return
 	}
 	
 	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkin_id"), 10, 64)
 	if err != nil {
-		response.BadRequest(w, "Invalid check-in ID", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid check-in ID")
 		return
 	}
 	
 	userID, ok := r.Context().Value(ctxkeys.UserIDKey).(int64)
 	if !ok {
-		response.Unauthorized(w, "Unauthorized")
+		response.Unauthorized(w, "UNAUTHORIZED", "Unauthorized")
 		return
 	}
 	
 	var req RejectCheckinRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.BadRequest(w, "Invalid request body", nil)
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
 		return
 	}
 	

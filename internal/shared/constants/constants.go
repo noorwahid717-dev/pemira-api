@@ -4,6 +4,8 @@ type Role string
 
 const (
 	RoleStudent      Role = "STUDENT"
+	RoleLecturer     Role = "LECTURER"
+	RoleStaff        Role = "STAFF"
 	RoleAdmin        Role = "ADMIN"
 	RoleTPSOperator  Role = "TPS_OPERATOR"
 	RoleSuperAdmin   Role = "SUPER_ADMIN"

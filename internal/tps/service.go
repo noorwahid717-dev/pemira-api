@@ -54,7 +54,7 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*TPSDetailResponse, er
 	if qr != nil {
 		response.QR = &QRInfo{
 			ID:             qr.ID,
-			QRSecretSuffix: qr.QRSecretSuffix,
+			QRToken: qr.QRToken,
 			IsActive:       qr.IsActive,
 			CreatedAt:      qr.CreatedAt.Format(time.RFC3339),
 		}
@@ -152,7 +152,7 @@ func (s *Service) Create(ctx context.Context, req *CreateTPSRequest) (int64, err
 		qrSecret := s.GenerateQRSecret()
 		qr := &TPSQR{
 			TPSID:          tps.ID,
-			QRSecretSuffix: qrSecret,
+			QRToken: qrSecret,
 			IsActive:       true,
 		}
 		_ = s.repo.CreateQR(ctx, qr)
@@ -220,7 +220,7 @@ func (s *Service) RegenerateQR(ctx context.Context, tpsID int64) (*RegenerateQRR
 	qrSecret := s.GenerateQRSecret()
 	newQR := &TPSQR{
 		TPSID:          tpsID,
-		QRSecretSuffix: qrSecret,
+		QRToken: qrSecret,
 		IsActive:       true,
 	}
 	

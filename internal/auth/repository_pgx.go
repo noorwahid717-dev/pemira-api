@@ -21,26 +21,42 @@ func NewPgRepository(db *pgxpool.Pool) *PgRepository {
 // CreateUserAccount creates a new user account
 func (r *PgRepository) CreateUserAccount(ctx context.Context, user *UserAccount) (*UserAccount, error) {
 	query := `
-		INSERT INTO user_accounts (username, password_hash, role, voter_id, tps_id, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, username, password_hash, role, voter_id, tps_id, is_active, created_at, updated_at
+		INSERT INTO user_accounts (username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		RETURNING id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, created_at, updated_at
 	`
 
 	var created UserAccount
+	email := user.Email
+	fullName := user.FullName
+	if email == "" {
+		email = user.Username + "@pemira.ac.id"
+	}
+	if fullName == "" {
+		fullName = user.Username
+	}
 	err := r.db.QueryRow(ctx, query,
 		user.Username,
+		email,
 		user.PasswordHash,
+		fullName,
 		user.Role,
 		user.VoterID,
 		user.TPSID,
+		user.LecturerID,
+		user.StaffID,
 		user.IsActive,
 	).Scan(
 		&created.ID,
 		&created.Username,
+		&created.Email,
 		&created.PasswordHash,
+		&created.FullName,
 		&created.Role,
 		&created.VoterID,
 		&created.TPSID,
+		&created.LecturerID,
+		&created.StaffID,
 		&created.IsActive,
 		&created.CreatedAt,
 		&created.UpdatedAt,
@@ -60,7 +76,7 @@ func (r *PgRepository) CreateUserAccount(ctx context.Context, user *UserAccount)
 // GetUserByUsername retrieves a user by username
 func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (*UserAccount, error) {
 	query := `
-		SELECT id, username, password_hash, role, voter_id, tps_id, is_active, created_at, updated_at
+		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, created_at, updated_at
 		FROM user_accounts
 		WHERE username = $1
 	`
@@ -69,10 +85,14 @@ func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (
 	err := r.db.QueryRow(ctx, query, username).Scan(
 		&user.ID,
 		&user.Username,
+		&user.Email,
 		&user.PasswordHash,
+		&user.FullName,
 		&user.Role,
 		&user.VoterID,
 		&user.TPSID,
+		&user.LecturerID,
+		&user.StaffID,
 		&user.IsActive,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -91,7 +111,7 @@ func (r *PgRepository) GetUserByUsername(ctx context.Context, username string) (
 // GetUserByID retrieves a user by ID
 func (r *PgRepository) GetUserByID(ctx context.Context, userID int64) (*UserAccount, error) {
 	query := `
-		SELECT id, username, password_hash, role, voter_id, tps_id, is_active, created_at, updated_at
+		SELECT id, username, email, password_hash, full_name, role, voter_id, tps_id, lecturer_id, staff_id, is_active, created_at, updated_at
 		FROM user_accounts
 		WHERE id = $1
 	`
@@ -100,10 +120,14 @@ func (r *PgRepository) GetUserByID(ctx context.Context, userID int64) (*UserAcco
 	err := r.db.QueryRow(ctx, query, userID).Scan(
 		&user.ID,
 		&user.Username,
+		&user.Email,
 		&user.PasswordHash,
+		&user.FullName,
 		&user.Role,
 		&user.VoterID,
 		&user.TPSID,
+		&user.LecturerID,
+		&user.StaffID,
 		&user.IsActive,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -123,8 +147,7 @@ func (r *PgRepository) GetUserByID(ctx context.Context, userID int64) (*UserAcco
 func (r *PgRepository) UpdateUserAccount(ctx context.Context, user *UserAccount) error {
 	query := `
 		UPDATE user_accounts
-		SET password_hash = $2, role = $3, voter_id = $4, tps_id = $5, 
-		    is_active = $6, updated_at = NOW()
+		SET password_hash = $2, role = $3, voter_id = $4, tps_id = $5, lecturer_id = $6, staff_id = $7, is_active = $8, updated_at = NOW()
 		WHERE id = $1
 	`
 
@@ -134,6 +157,8 @@ func (r *PgRepository) UpdateUserAccount(ctx context.Context, user *UserAccount)
 		user.Role,
 		user.VoterID,
 		user.TPSID,
+		user.LecturerID,
+		user.StaffID,
 		user.IsActive,
 	)
 
@@ -337,6 +362,49 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 			return nil, err
 		}
 
+	case constants.RoleLecturer:
+		if user.LecturerID == nil {
+			return profile, nil
+		}
+
+		query := `
+			SELECT name, faculty_name, department_name, position
+			FROM lecturers
+			WHERE id = $1
+		`
+
+		err := r.db.QueryRow(ctx, query, *user.LecturerID).Scan(
+			&profile.Name,
+			&profile.FacultyName,
+			&profile.DepartmentName,
+			&profile.Position,
+		)
+
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+
+	case constants.RoleStaff:
+		if user.StaffID == nil {
+			return profile, nil
+		}
+
+		query := `
+			SELECT name, unit_name, position
+			FROM staff_members
+			WHERE id = $1
+		`
+
+		err := r.db.QueryRow(ctx, query, *user.StaffID).Scan(
+			&profile.Name,
+			&profile.UnitName,
+			&profile.Position,
+		)
+
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+
 	case constants.RoleTPSOperator:
 		if user.TPSID == nil {
 			return profile, nil
@@ -362,4 +430,103 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 	}
 
 	return profile, nil
+}
+
+// CreateVoter inserts a new voter record and returns its ID.
+func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration) (int64, error) {
+	query := `
+		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, academic_status)
+		VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')
+		RETURNING id
+	`
+
+	var id int64
+	if err := r.db.QueryRow(ctx, query,
+		voter.NIM,
+		voter.Name,
+		voter.Email,
+		voter.FacultyName,
+		voter.StudyProgramName,
+		voter.CohortYear,
+	).Scan(&id); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_voters_nim" {
+			return 0, ErrNIMExists
+		}
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// DeleteVoter removes a voter row by ID (used for cleanup on failure).
+func (r *PgRepository) DeleteVoter(ctx context.Context, voterID int64) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM voters WHERE id = $1`, voterID)
+	return err
+}
+
+// CreateLecturer inserts a new lecturer record and returns its ID.
+func (r *PgRepository) CreateLecturer(ctx context.Context, lecturer LecturerRegistration) (int64, error) {
+	query := `
+		INSERT INTO lecturers (nidn, name, email, faculty_name, department_name, position)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`
+
+	var id int64
+	if err := r.db.QueryRow(ctx, query,
+		lecturer.NIDN,
+		lecturer.Name,
+		lecturer.Email,
+		lecturer.FacultyName,
+		lecturer.DepartmentName,
+		lecturer.Position,
+	).Scan(&id); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_lecturers_nidn" {
+			return 0, ErrNIDNExists
+		}
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// DeleteLecturer removes a lecturer row by ID (used for cleanup on failure).
+func (r *PgRepository) DeleteLecturer(ctx context.Context, lecturerID int64) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM lecturers WHERE id = $1`, lecturerID)
+	return err
+}
+
+// CreateStaff inserts a new staff record and returns its ID.
+func (r *PgRepository) CreateStaff(ctx context.Context, staff StaffRegistration) (int64, error) {
+	query := `
+		INSERT INTO staff_members (nip, name, email, unit_name, position, employment_status)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id
+	`
+
+	var id int64
+	if err := r.db.QueryRow(ctx, query,
+		staff.NIP,
+		staff.Name,
+		staff.Email,
+		staff.UnitName,
+		staff.Position,
+		staff.Status,
+	).Scan(&id); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_staff_members_nip" {
+			return 0, ErrNIPExists
+		}
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// DeleteStaff removes a staff row by ID (used for cleanup on failure).
+func (r *PgRepository) DeleteStaff(ctx context.Context, staffID int64) error {
+	_, err := r.db.Exec(ctx, `DELETE FROM staff_members WHERE id = $1`, staffID)
+	return err
 }
