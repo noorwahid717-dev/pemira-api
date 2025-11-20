@@ -30,6 +30,11 @@ Mengambil daftar semua TPS.
     "location": "Gedung A Lantai 1",
     "capacity": 500,
     "is_active": true,
+    "open_time": "08:00",
+    "close_time": "15:00",
+    "pic_name": "John Doe",
+    "pic_phone": "+62812345678",
+    "has_active_qr": true,
     "created_at": "2024-01-15T10:00:00Z",
     "updated_at": "2024-01-15T10:00:00Z"
   },
@@ -40,6 +45,11 @@ Mengambil daftar semua TPS.
     "location": "Gedung FT Lantai 2",
     "capacity": 300,
     "is_active": true,
+    "open_time": "09:00",
+    "close_time": "16:00",
+    "pic_name": "Jane Smith",
+    "pic_phone": "+62887654321",
+    "has_active_qr": false,
     "created_at": "2024-01-15T11:00:00Z",
     "updated_at": "2024-01-15T11:00:00Z"
   }
@@ -90,16 +100,26 @@ Membuat TPS baru.
   "code": "TPS01",
   "name": "TPS Aula Utama",
   "location": "Gedung A Lantai 1",
-  "capacity": 500
+  "capacity": 500,
+  "open_time": "08:00",
+  "close_time": "15:00",
+  "pic_name": "John Doe",
+  "pic_phone": "+62812345678",
+  "notes": "TPS utama, dekat kantin"
 }
 ```
 
-| Field    | Type   | Required | Description                      |
-|----------|--------|----------|----------------------------------|
-| code     | string | Yes      | Kode TPS (unique, e.g. "TPS01")  |
-| name     | string | Yes      | Nama TPS                         |
-| location | string | Yes      | Lokasi/alamat TPS                |
-| capacity | int    | Yes      | Estimasi kapasitas pemilih       |
+| Field      | Type   | Required | Description                            |
+|------------|--------|----------|----------------------------------------|
+| code       | string | Yes      | Kode TPS (unique, e.g. "TPS01")        |
+| name       | string | Yes      | Nama TPS                               |
+| location   | string | Yes      | Lokasi/alamat TPS                      |
+| capacity   | int    | Yes      | Estimasi kapasitas pemilih             |
+| open_time  | string | No       | Jam buka (format "HH:MM", default 08:00) |
+| close_time | string | No       | Jam tutup (format "HH:MM", default 17:00) |
+| pic_name   | string | No       | Nama penanggung jawab TPS              |
+| pic_phone  | string | No       | Nomor kontak panitia TPS               |
+| notes      | string | No       | Catatan internal                       |
 
 **Response 201 Created**
 ```json
@@ -110,6 +130,12 @@ Membuat TPS baru.
   "location": "Gedung A Lantai 1",
   "capacity": 500,
   "is_active": true,
+  "open_time": "08:00",
+  "close_time": "15:00",
+  "pic_name": "John Doe",
+  "pic_phone": "+62812345678",
+  "notes": "TPS utama, dekat kantin",
+  "has_active_qr": false,
   "created_at": "2024-01-15T10:00:00Z",
   "updated_at": "2024-01-15T10:00:00Z"
 }
@@ -191,7 +217,131 @@ Menghapus TPS.
 
 ---
 
-### 2. Operator Management
+### 2. QR Management
+
+#### 2.1. Get QR Metadata
+
+**GET** `/api/v1/admin/tps/{tpsID}/qr`
+
+Mengambil metadata QR untuk TPS (status, token aktif, dll).
+
+**Response 200 OK**
+```json
+{
+  "tps_id": 3,
+  "code": "TPS01",
+  "name": "TPS Aula Utama",
+  "active_qr": {
+    "id": 12,
+    "qr_token": "tps_qr_3_9Jsd8aKx...",
+    "created_at": "2025-11-20T01:23:45Z"
+  }
+}
+```
+
+Jika belum ada QR aktif:
+```json
+{
+  "tps_id": 3,
+  "code": "TPS01",
+  "name": "TPS Aula Utama",
+  "active_qr": null
+}
+```
+
+**Response 404 Not Found**
+```json
+{
+  "code": "TPS_NOT_FOUND",
+  "message": "TPS tidak ditemukan."
+}
+```
+
+---
+
+#### 2.2. Generate/Rotate QR
+
+**POST** `/api/v1/admin/tps/{tpsID}/qr/rotate`
+
+Generate QR baru atau rotate QR yang sudah ada. Digunakan untuk:
+- Generate QR pertama kali untuk TPS baru
+- Rotate QR jika bocor atau kompromi
+
+**Request Body** (opsional, bisa kosong)
+```json
+{}
+```
+
+**Response 200 OK**
+```json
+{
+  "tps_id": 3,
+  "code": "TPS01",
+  "name": "TPS Aula Utama",
+  "active_qr": {
+    "id": 13,
+    "qr_token": "tps_qr_3_new_AbCdEf...",
+    "created_at": "2025-11-20T02:00:00Z"
+  }
+}
+```
+
+**Response 404 Not Found**
+```json
+{
+  "code": "TPS_NOT_FOUND",
+  "message": "TPS tidak ditemukan."
+}
+```
+
+**Notes:**
+- QR lama akan di-set `is_active = false` dan `rotated_at = NOW()`
+- Token baru di-generate secara random menggunakan crypto/rand
+- Token format: `tps_qr_{tpsID}_{random32chars}`
+
+---
+
+#### 2.3. Get QR for Print
+
+**GET** `/api/v1/admin/tps/{tpsID}/qr/print`
+
+Mengambil payload QR dalam format siap cetak. Frontend dapat menggunakan library QR code untuk render.
+
+**Response 200 OK**
+```json
+{
+  "tps_id": 3,
+  "code": "TPS01",
+  "name": "TPS Aula Utama",
+  "qr_payload": "pemira://tps-checkin?t=tps_qr_3_new_AbCdEf..."
+}
+```
+
+**Response 404 Not Found**
+```json
+{
+  "code": "TPS_NOT_FOUND",
+  "message": "TPS tidak ditemukan."
+}
+```
+
+**Response 500 Internal Server Error** (jika tidak ada QR aktif)
+```json
+{
+  "code": "INTERNAL_ERROR",
+  "message": "Gagal mengambil data cetak QR."
+}
+```
+
+**Use Case:**
+1. Admin buka halaman cetak QR
+2. Frontend render QR code dari `qr_payload`
+3. Admin print QR untuk ditempel di TPS
+4. Format QR: `pemira://tps-checkin?t={token}`
+
+---
+
+### 3. Operator Management
 
 #### 2.1. List Operators
 
@@ -277,9 +427,9 @@ Menghapus operator dari TPS.
 
 ---
 
-### 3. Monitoring
+### 4. Monitoring
 
-#### 3.1. Monitor TPS per Election
+#### 4.1. Monitor TPS per Election
 
 **GET** `/api/v1/admin/elections/{electionID}/tps/monitor`
 
