@@ -166,3 +166,41 @@ func (r *voteRepository) MarkCheckinUsed(ctx context.Context, tx pgx.Tx, checkin
 	
 	return nil
 }
+
+// GetCheckinByID returns checkin by ID with lock
+func (r *voteRepository) GetCheckinByID(ctx context.Context, tx pgx.Tx, checkinID int64) (*tps.TPSCheckin, error) {
+	query := `
+		SELECT id, tps_id, voter_id, election_id, status, scan_at,
+		       approved_at, approved_by_id, rejection_reason, expires_at,
+		       created_at, updated_at
+		FROM tps_checkins
+		WHERE id = $1
+		FOR UPDATE
+	`
+
+	var checkin tps.TPSCheckin
+
+	err := tx.QueryRow(ctx, query, checkinID).Scan(
+		&checkin.ID,
+		&checkin.TPSID,
+		&checkin.VoterID,
+		&checkin.ElectionID,
+		&checkin.Status,
+		&checkin.ScanAt,
+		&checkin.ApprovedAt,
+		&checkin.ApprovedByID,
+		&checkin.RejectionReason,
+		&checkin.ExpiresAt,
+		&checkin.CreatedAt,
+		&checkin.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, shared.ErrNotFound
+		}
+		return nil, fmt.Errorf("get checkin by id: %w", err)
+	}
+
+	return &checkin, nil
+}

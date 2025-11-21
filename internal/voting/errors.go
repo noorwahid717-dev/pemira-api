@@ -15,6 +15,8 @@ var (
 	ErrCheckinExpired         = errors.New("TPS check-in has expired")
 	ErrTPSNotFound            = errors.New("TPS not found")
 	ErrVoterMappingMissing    = errors.New("voter mapping missing")
+	ErrInvalidBallotQR        = errors.New("invalid ballot qr")
+	ErrElectionMismatch       = errors.New("election mismatch")
 )
 
 func translateNotFound(err error, customErr error) error {

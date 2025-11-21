@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -43,12 +44,18 @@ type setMethodRequest struct {
 	TPSID      *int64 `json:"tps_id,omitempty"` // required if method=TPS
 }
 
+type scanCandidateRequest struct {
+	BallotQRPayload string `json:"ballot_qr_payload"`
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/online/cast", h.CastOnlineVote)
 	r.Post("/voting/tps/cast", h.CastTPSVote)
 	r.Get("/voting/tps/status", h.GetTPSVotingStatus)
 	r.Get("/voting/receipt", h.GetVotingReceipt)
 	r.Post("/voting/method", h.SetVoterMethod)
+	r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", h.ScanTPSCandidate)
+	r.Post("/tps/ballots/parse-qr", h.ParseBallotQR)
 }
 
 // POST /voting/online/cast
@@ -218,6 +225,68 @@ func (h *Handler) SetVoterMethod(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// POST /tps/{tpsID}/checkins/{checkinID}/scan-candidate
+func (h *Handler) ScanTPSCandidate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "tpsID tidak valid.")
+		return
+	}
+	checkinID, err := strconv.ParseInt(chi.URLParam(r, "checkinID"), 10, 64)
+	if err != nil || checkinID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "checkinID tidak valid.")
+		return
+	}
+
+	var reqBody scanCandidateRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+	if strings.TrimSpace(reqBody.BallotQRPayload) == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "ballot_qr_payload wajib diisi.")
+		return
+	}
+
+	result, err := h.service.ScanCandidateAtTPS(ctx, authUser, ScanCandidateRequest{
+		TPSID:     tpsID,
+		CheckinID: checkinID,
+		Payload:   reqBody.BallotQRPayload,
+	})
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// POST /tps/ballots/parse-qr (helper)
+func (h *Handler) ParseBallotQR(w http.ResponseWriter, r *http.Request) {
+	var reqBody scanCandidateRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+	qr, err := parseBallotQR(reqBody.BallotQRPayload)
+	if err != nil {
+		response.BadRequest(w, "INVALID_BALLOT_QR", "Kode QR surat suara tidak dikenali.")
+		return
+	}
+	response.JSON(w, http.StatusOK, qr)
+}
+
 // handleError maps domain errors to HTTP responses
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
@@ -256,6 +325,12 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, ErrVoterMappingMissing):
 		response.Forbidden(w, "VOTER_MAPPING_MISSING", "Akun ini belum terhubung dengan data pemilih.")
+
+	case errors.Is(err, ErrInvalidBallotQR):
+		response.BadRequest(w, "INVALID_BALLOT_QR", "Kode QR surat suara tidak dikenali.")
+
+	case errors.Is(err, ErrElectionMismatch):
+		response.BadRequest(w, "ELECTION_MISMATCH", "Kode QR tidak sesuai dengan pemilu di TPS ini.")
 
 	default:
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")

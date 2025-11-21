@@ -43,6 +43,9 @@ type VoteRepository interface {
 	
 	// MarkCheckinUsed marks a check-in as used
 	MarkCheckinUsed(ctx context.Context, tx pgx.Tx, checkinID int64, usedAt time.Time) error
+	
+	// GetCheckinByID returns checkin by ID with lock
+	GetCheckinByID(ctx context.Context, tx pgx.Tx, checkinID int64) (*tps.TPSCheckin, error)
 }
 
 // VoteStatsRepository handles vote statistics (optional, for read-model)

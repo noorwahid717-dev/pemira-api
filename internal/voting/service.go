@@ -35,6 +35,12 @@ type SetMethodRequest struct {
 	TPSID      *int64
 }
 
+type ScanCandidateRequest struct {
+	TPSID     int64
+	CheckinID int64
+	Payload   string
+}
+
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
@@ -431,4 +437,116 @@ func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, re
 
 		return s.voterRepo.UpdateStatus(ctx, tx, status)
 	})
+}
+
+// ScanCandidateAtTPS handles QR ballot scan after check-in approval.
+func (s *Service) ScanCandidateAtTPS(ctx context.Context, authUser auth.AuthUser, req ScanCandidateRequest) (*VoteResultEntity, error) {
+	if s.db == nil {
+		return nil, errors.New("service not initialized")
+	}
+
+	// Only TPS operators (or ketua_tps via admin role) with matching TPSID
+	if authUser.Role != constants.RoleTPSOperator && authUser.Role != constants.RoleAdmin {
+		return nil, ErrMethodNotAllowed
+	}
+	if authUser.TPSID == nil || *authUser.TPSID != req.TPSID {
+		return nil, ErrTPSNotFound
+	}
+
+	qr, err := parseBallotQR(req.Payload)
+	if err != nil {
+		return nil, ErrInvalidBallotQR
+	}
+
+	var result *VoteResultEntity
+	err = s.withTx(ctx, func(tx pgx.Tx) error {
+		checkin, err := s.voteRepo.GetCheckinByID(ctx, tx, req.CheckinID)
+		if err != nil {
+			return translateNotFound(err, ErrTPSCheckinNotFound)
+		}
+		if checkin.TPSID != req.TPSID {
+			return ErrTPSNotFound
+		}
+		if checkin.Status != tps.CheckinStatusApproved {
+			return ErrTPSCheckinNotApproved
+		}
+		if checkin.ExpiresAt != nil && checkin.ExpiresAt.Before(time.Now().UTC()) {
+			return ErrCheckinExpired
+		}
+
+		// Election match
+		if checkin.ElectionID != qr.ElectionID {
+			return ErrElectionMismatch
+		}
+
+		// Get election
+		election, err := s.electionRepo.GetByID(ctx, qr.ElectionID)
+		if err != nil {
+			return translateNotFound(err, ErrElectionNotFound)
+		}
+		if election.Status != "VOTING_OPEN" || !election.TPSEnabled {
+			return ErrElectionNotOpen
+		}
+
+		// Lock voter_status
+		status, err := s.voterRepo.GetStatusForUpdate(ctx, tx, qr.ElectionID, checkin.VoterID)
+		if err != nil {
+			return translateNotFound(err, ErrNotEligible)
+		}
+		if status.HasVoted {
+			return ErrAlreadyVoted
+		}
+
+		// Validate candidate belongs to election
+		cand, err := s.candidateRepo.GetByIDWithTx(ctx, tx, qr.CandidateID)
+		if err != nil || cand.ElectionID != qr.ElectionID {
+			return ErrCandidateNotFound
+		}
+
+		now := time.Now().UTC()
+		tokenHash := generateTokenHash(qr.ElectionID, checkin.VoterID)
+
+		// Insert vote
+		vote := &Vote{
+			ElectionID:  qr.ElectionID,
+			CandidateID: qr.CandidateID,
+			TokenHash:   tokenHash,
+			Channel:     "TPS",
+			TPSID:       &req.TPSID,
+			CastAt:      now,
+		}
+		if err := s.voteRepo.InsertVote(ctx, tx, vote); err != nil {
+			return err
+		}
+
+		// Update voter_status
+		status.HasVoted = true
+		status.VotingMethod = stringPtr("TPS")
+		status.TPSID = &req.TPSID
+		status.VotedAt = &now
+		status.TokenHash = &tokenHash
+		if err := s.voterRepo.UpdateStatus(ctx, tx, status); err != nil {
+			return err
+		}
+
+		// Update checkin status to USED
+		if err := s.voteRepo.MarkCheckinUsed(ctx, tx, checkin.ID, now); err != nil {
+			return err
+		}
+
+		result = &VoteResultEntity{
+			ElectionID: qr.ElectionID,
+			VoterID:    checkin.VoterID,
+			Method:     "TPS",
+			VotedAt:    now,
+			TPS:        &TPSInfo{ID: checkin.TPSID},
+			Receipt: ReceiptDetail{
+				TokenHash: tokenHash,
+				Note:      "Vote dicatat melalui scan QR surat suara.",
+			},
+		}
+		return nil
+	})
+
+	return result, err
 }

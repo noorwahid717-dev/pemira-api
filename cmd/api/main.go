@@ -222,6 +222,13 @@ func main() {
 					r.Delete("/{tpsID}/operators/{userID}", tpsAdminHandler.RemoveOperator)
 				})
 			})
+
+			// TPS Operator routes
+			r.Group(func(r chi.Router) {
+				r.Use(httpMiddleware.AuthTPSOperatorOnly(jwtManager))
+				r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", votingHandler.ScanTPSCandidate)
+				r.Post("/tps/ballots/parse-qr", votingHandler.ParseBallotQR)
+			})
 		})
 	})
 
