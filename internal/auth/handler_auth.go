@@ -152,6 +152,13 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetFacultyPrograms returns static faculty/program options for dropdowns
+func (h *AuthHandler) GetFacultyPrograms(w http.ResponseWriter, r *http.Request) {
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"faculties": facultyProgramOptions,
+	})
+}
+
 // Me handles GET /auth/me
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context (set by auth middleware)

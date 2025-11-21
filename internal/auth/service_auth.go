@@ -43,6 +43,10 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 	if len(req.Password) < 6 {
 		return nil, ErrInvalidRegistration
 	}
+	semester := strings.TrimSpace(req.Semester)
+	if semester == "" {
+		return nil, ErrInvalidRegistration
+	}
 
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
@@ -60,7 +64,7 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		Email:            email,
 		FacultyName:      req.FacultyName,
 		StudyProgramName: req.StudyProgramName,
-		CohortYear:       req.CohortYear,
+		Semester:         strings.TrimSpace(req.Semester),
 	})
 	if err != nil {
 		return nil, err
@@ -102,7 +106,7 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		Name:             name,
 		FacultyName:      req.FacultyName,
 		StudyProgramName: req.StudyProgramName,
-		CohortYear:       req.CohortYear,
+		Semester:         semester,
 	}
 
 	return &AuthUser{
@@ -172,6 +176,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			Email:            email,
 			FacultyName:      req.FacultyName,
 			StudyProgramName: req.DepartmentName,
+			Semester:         "",
 		})
 		if err != nil {
 			_ = s.repo.DeleteLecturer(ctx, lecturerID)
@@ -240,6 +245,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			Name:        req.Name,
 			Email:       email,
 			FacultyName: req.UnitName,
+			Semester:    "",
 		})
 		if err != nil {
 			_ = s.repo.DeleteStaff(ctx, staffID)

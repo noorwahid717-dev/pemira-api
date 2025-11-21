@@ -139,6 +139,9 @@ func main() {
 			})
 		})
 
+		// Metadata for dropdowns
+		r.Get("/meta/faculties-programs", authHandler.GetFacultyPrograms)
+
 		// Auth routes (public)
 		r.Post("/auth/register/student", authHandler.RegisterStudent)
 		r.Post("/auth/register/lecturer-staff", authHandler.RegisterLecturerStaff)
