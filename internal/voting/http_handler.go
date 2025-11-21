@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
-	
+
 	"pemira-api/internal/auth"
 	"pemira-api/internal/http/response"
 )
@@ -36,11 +37,18 @@ type tpsVoteRequest struct {
 	TPSID       int64 `json:"tps_id"`
 }
 
+type setMethodRequest struct {
+	ElectionID int64  `json:"election_id"`
+	Method     string `json:"method"`           // ONLINE or TPS
+	TPSID      *int64 `json:"tps_id,omitempty"` // required if method=TPS
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/online/cast", h.CastOnlineVote)
 	r.Post("/voting/tps/cast", h.CastTPSVote)
 	r.Get("/voting/tps/status", h.GetTPSVotingStatus)
 	r.Get("/voting/receipt", h.GetVotingReceipt)
+	r.Post("/voting/method", h.SetVoterMethod)
 }
 
 // POST /voting/online/cast
@@ -174,6 +182,42 @@ func (h *Handler) GetVotingReceipt(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, http.StatusOK, receipt)
 }
 
+// POST /voting/method
+func (h *Handler) SetVoterMethod(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	var reqBody setMethodRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	if reqBody.ElectionID <= 0 || strings.TrimSpace(reqBody.Method) == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "election_id dan method wajib diisi.")
+		return
+	}
+
+	err := h.service.SetVoterMethod(ctx, authUser, SetMethodRequest{
+		ElectionID: reqBody.ElectionID,
+		Method:     reqBody.Method,
+		TPSID:      reqBody.TPSID,
+	})
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Preferensi metode voting disimpan.",
+	})
+}
+
 // handleError maps domain errors to HTTP responses
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
@@ -217,5 +261,3 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
 	}
 }
-
-
