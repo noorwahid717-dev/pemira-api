@@ -132,6 +132,18 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 		return nil, err
 	}
 
+	mode := normalizeVotingMode(req.VotingMode)
+	regElection, err := s.repo.FindOrCreateRegistrationElection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if mode == "ONLINE" && !regElection.OnlineEnabled {
+		return nil, ErrModeNotAvailable
+	}
+	if mode == "TPS" && !regElection.TPSEnabled {
+		return nil, ErrModeNotAvailable
+	}
+
 	switch roleType {
 	case "LECTURER":
 		nidn := strings.TrimSpace(req.NIDN)
@@ -154,6 +166,18 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			return nil, err
 		}
 
+		voterID, err := s.repo.CreateVoter(ctx, VoterRegistration{
+			NIM:              nidn,
+			Name:             req.Name,
+			Email:            email,
+			FacultyName:      req.FacultyName,
+			StudyProgramName: req.DepartmentName,
+		})
+		if err != nil {
+			_ = s.repo.DeleteLecturer(ctx, lecturerID)
+			return nil, err
+		}
+
 		user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
 			Username:     nidn,
 			Email:        email,
@@ -161,12 +185,18 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			PasswordHash: passwordHash,
 			Role:         constants.RoleLecturer,
 			LecturerID:   &lecturerID,
+			VoterID:      &voterID,
 			IsActive:     true,
 		})
 		if err != nil {
 			_ = s.repo.DeleteLecturer(ctx, lecturerID)
+			_ = s.repo.DeleteVoter(ctx, voterID)
 			return nil, err
 		}
+
+		onlineAllowed := mode == "ONLINE"
+		tpsAllowed := mode == "TPS"
+		_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
 
 		profile := &UserProfile{
 			Name:           req.Name,
@@ -179,6 +209,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			ID:         user.ID,
 			Username:   user.Username,
 			Role:       user.Role,
+			VoterID:    user.VoterID,
 			LecturerID: user.LecturerID,
 			Profile:    profile,
 		}, nil
@@ -204,6 +235,17 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			return nil, err
 		}
 
+		voterID, err := s.repo.CreateVoter(ctx, VoterRegistration{
+			NIM:         nip,
+			Name:        req.Name,
+			Email:       email,
+			FacultyName: req.UnitName,
+		})
+		if err != nil {
+			_ = s.repo.DeleteStaff(ctx, staffID)
+			return nil, err
+		}
+
 		user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
 			Username:     nip,
 			Email:        email,
@@ -211,12 +253,18 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			PasswordHash: passwordHash,
 			Role:         constants.RoleStaff,
 			StaffID:      &staffID,
+			VoterID:      &voterID,
 			IsActive:     true,
 		})
 		if err != nil {
 			_ = s.repo.DeleteStaff(ctx, staffID)
+			_ = s.repo.DeleteVoter(ctx, voterID)
 			return nil, err
 		}
+
+		onlineAllowed := mode == "ONLINE"
+		tpsAllowed := mode == "TPS"
+		_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
 
 		profile := &UserProfile{
 			Name:     req.Name,
@@ -228,6 +276,7 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 			ID:       user.ID,
 			Username: user.Username,
 			Role:     user.Role,
+			VoterID:  user.VoterID,
 			StaffID:  user.StaffID,
 			Profile:  profile,
 		}, nil

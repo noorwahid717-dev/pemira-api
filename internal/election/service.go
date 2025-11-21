@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"pemira-api/internal/auth"
-	"pemira-api/internal/shared/constants"
 )
 
 type Service struct {
@@ -36,7 +35,6 @@ func (s *Service) GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, 
 }
 
 var (
-	ErrUnauthorizedRole    = errors.New("role not allowed")
 	ErrVoterMappingMissing = errors.New("voter mapping missing for user")
 )
 
@@ -45,10 +43,6 @@ func (s *Service) GetMeStatus(
 	authUser auth.AuthUser,
 	electionID int64,
 ) (*MeStatusDTO, error) {
-	if authUser.Role != constants.RoleStudent {
-		return nil, ErrUnauthorizedRole
-	}
-
 	if authUser.VoterID == nil {
 		return nil, ErrVoterMappingMissing
 	}
