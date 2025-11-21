@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -348,7 +349,7 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 		}
 
 		query := `
-			SELECT name, faculty_name, study_program_name, cohort_year
+			SELECT name, faculty_name, study_program_name, cohort_year, class_label
 			FROM voters
 			WHERE id = $1
 		`
@@ -358,6 +359,7 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 			&profile.FacultyName,
 			&profile.StudyProgramName,
 			&profile.CohortYear,
+			&profile.Semester,
 		)
 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -437,19 +439,23 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 // CreateVoter inserts a new voter record and returns its ID.
 func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration) (int64, error) {
 	query := `
-		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, academic_status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'ACTIVE')
+		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, class_label, academic_status)
+		VALUES ($1, $2, $3, $4, $5, NULL, $6, 'ACTIVE')
 		RETURNING id
 	`
 
 	var id int64
+	classLabel := strings.TrimSpace(voter.Semester)
+	if classLabel == "" {
+		classLabel = "Semester tidak diisi"
+	}
 	if err := r.db.QueryRow(ctx, query,
 		voter.NIM,
 		voter.Name,
 		voter.Email,
 		voter.FacultyName,
 		voter.StudyProgramName,
-		voter.CohortYear,
+		classLabel,
 	).Scan(&id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_voters_nim" {

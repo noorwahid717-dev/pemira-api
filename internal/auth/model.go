@@ -49,6 +49,7 @@ type UserProfile struct {
 	FacultyName      string `json:"faculty_name,omitempty"`
 	StudyProgramName string `json:"study_program_name,omitempty"`
 	CohortYear       *int   `json:"cohort_year,omitempty"`
+	Semester         string `json:"semester,omitempty"`
 	TPSCode          string `json:"tps_code,omitempty"`
 	TPSName          string `json:"tps_name,omitempty"`
 	// For lecturers

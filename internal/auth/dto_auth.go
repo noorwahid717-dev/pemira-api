@@ -45,7 +45,7 @@ type RegisterStudentRequest struct {
 	Email            string `json:"email,omitempty"`
 	FacultyName      string `json:"faculty_name"`
 	StudyProgramName string `json:"study_program_name"`
-	CohortYear       *int   `json:"cohort_year,omitempty"`
+	Semester         string `json:"semester"`
 	Password         string `json:"password"`
 	VotingMode       string `json:"voting_mode,omitempty"` // ONLINE | TPS
 }
@@ -72,7 +72,7 @@ type VoterRegistration struct {
 	Email            string
 	FacultyName      string
 	StudyProgramName string
-	CohortYear       *int
+	Semester         string
 }
 
 // LecturerRegistration contains data needed to create a lecturer row
