@@ -26,17 +26,20 @@ type VoteToken struct {
 }
 
 type VoterStatusEntity struct {
-	ID           int64      `json:"id"`
-	ElectionID   int64      `json:"election_id"`
-	VoterID      int64      `json:"voter_id"`
-	IsEligible   bool       `json:"is_eligible"`
-	HasVoted     bool       `json:"has_voted"`
-	VotingMethod *string    `json:"voting_method"` // "ONLINE" | "TPS"
-	TPSID        *int64     `json:"tps_id"`
-	VotedAt      *time.Time `json:"voted_at"`
-	TokenHash    *string    `json:"token_hash"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID              int64      `json:"id"`
+	ElectionID      int64      `json:"election_id"`
+	VoterID         int64      `json:"voter_id"`
+	IsEligible      bool       `json:"is_eligible"`
+	HasVoted        bool       `json:"has_voted"`
+	VotingMethod    *string    `json:"voting_method"` // "ONLINE" | "TPS"
+	TPSID           *int64     `json:"tps_id"`
+	VotedAt         *time.Time `json:"voted_at"`
+	TokenHash       *string    `json:"token_hash"`
+	PreferredMethod *string    `json:"preferred_method,omitempty"`
+	OnlineAllowed   bool       `json:"online_allowed"`
+	TPSAllowed      bool       `json:"tps_allowed"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type VoteResultEntity struct {
@@ -71,4 +74,14 @@ type BallotScan struct {
 	RejectedReason  *string   `json:"rejected_reason,omitempty"`
 	ScannedByUserID int64     `json:"scanned_by_user_id"`
 	ScannedAt       time.Time `json:"scanned_at"`
+}
+
+type VoterTPSQR struct {
+	ID         int64      `json:"id"`
+	VoterID    int64      `json:"voter_id"`
+	ElectionID int64      `json:"election_id"`
+	QRToken    string     `json:"qr_token"`
+	IsActive   bool       `json:"is_active"`
+	RotatedAt  *time.Time `json:"rotated_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
 }

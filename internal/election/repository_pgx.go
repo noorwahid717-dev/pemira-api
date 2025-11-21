@@ -122,7 +122,10 @@ SELECT
     vs.voting_method,
     vs.tps_id,
     e.online_enabled,
-    e.tps_enabled
+    e.tps_enabled,
+    vs.preferred_method,
+    vs.online_allowed,
+    vs.tps_allowed
 FROM voter_status vs
 JOIN elections e
   ON e.id = vs.election_id
@@ -131,6 +134,8 @@ WHERE vs.election_id = $1
 `
 	var row MeStatusRow
 	var method *string
+	var preferred *string
+	var onlineAllowed, tpsAllowed bool
 
 	err := r.db.QueryRow(ctx, q, electionID, voterID).Scan(
 		&row.ElectionID,
@@ -142,6 +147,9 @@ WHERE vs.election_id = $1
 		&row.LastTPSID,
 		&row.OnlineEnabled,
 		&row.TPSEnabled,
+		&preferred,
+		&onlineAllowed,
+		&tpsAllowed,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -151,5 +159,8 @@ WHERE vs.election_id = $1
 	}
 
 	row.LastVoteChannel = method
+	row.PreferredMethod = preferred
+	row.OnlineAllowed = row.OnlineEnabled && onlineAllowed
+	row.TPSAllowed = row.TPSEnabled && tpsAllowed
 	return &row, nil
 }

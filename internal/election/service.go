@@ -83,18 +83,25 @@ func (s *Service) GetMeStatus(
 		case string(VoteMethodTPS):
 			method = VoteMethodTPS
 		}
+	} else if row.PreferredMethod != nil {
+		if *row.PreferredMethod == string(VoteMethodOnline) {
+			method = VoteMethodOnline
+		} else if *row.PreferredMethod == string(VoteMethodTPS) {
+			method = VoteMethodTPS
+		}
 	}
 
 	dto := &MeStatusDTO{
-		ElectionID:    row.ElectionID,
-		VoterID:       row.VoterID,
-		Eligible:      row.IsEligible,
-		HasVoted:      row.HasVoted,
-		Method:        method,
-		TPSID:         row.LastTPSID,
-		LastVoteAt:    row.LastVoteAt,
-		OnlineAllowed: row.OnlineEnabled,
-		TPSAllowed:    row.TPSEnabled,
+		ElectionID:      row.ElectionID,
+		VoterID:         row.VoterID,
+		Eligible:        row.IsEligible,
+		HasVoted:        row.HasVoted,
+		Method:          method,
+		TPSID:           row.LastTPSID,
+		LastVoteAt:      row.LastVoteAt,
+		PreferredMethod: row.PreferredMethod,
+		OnlineAllowed:   row.OnlineAllowed,
+		TPSAllowed:      row.TPSAllowed,
 	}
 
 	return dto, nil

@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -528,5 +530,51 @@ func (r *PgRepository) CreateStaff(ctx context.Context, staff StaffRegistration)
 // DeleteStaff removes a staff row by ID (used for cleanup on failure).
 func (r *PgRepository) DeleteStaff(ctx context.Context, staffID int64) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM staff_members WHERE id = $1`, staffID)
+	return err
+}
+
+// FindOrCreateRegistrationElection finds the latest election with status not ARCHIVED (REGISTRATION/CAMPAIGN/VOTING_OPEN/CLOSED).
+// If none exists, it will create a placeholder in REGISTRATION status with both channels enabled.
+func (r *PgRepository) FindOrCreateRegistrationElection(ctx context.Context) (*RegistrationElection, error) {
+	const findQuery = `
+		SELECT id, status, online_enabled, tps_enabled
+		FROM elections
+		WHERE status IN ('REGISTRATION','CAMPAIGN','VOTING_OPEN','CLOSED')
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var e RegistrationElection
+	err := r.db.QueryRow(ctx, findQuery).Scan(&e.ID, &e.Status, &e.OnlineEnabled, &e.TPSEnabled)
+	if err == nil {
+		return &e, nil
+	}
+
+	// Create placeholder election if not found
+	code := fmt.Sprintf("AUTO-%d", time.Now().Unix())
+	year := time.Now().Year()
+	createQuery := `
+		INSERT INTO elections (code, name, year, status, online_enabled, tps_enabled, created_at, updated_at)
+		VALUES ($1, $2, $3, 'REGISTRATION', TRUE, TRUE, NOW(), NOW())
+		RETURNING id, status, online_enabled, tps_enabled
+	`
+	err = r.db.QueryRow(ctx, createQuery, code, "Pemira Auto", year).Scan(&e.ID, &e.Status, &e.OnlineEnabled, &e.TPSEnabled)
+	if err != nil {
+		return nil, fmt.Errorf("create placeholder election: %w", err)
+	}
+	return &e, nil
+}
+
+// EnsureVoterStatus upserts preferred method and allowed flags for a voter in an election.
+func (r *PgRepository) EnsureVoterStatus(ctx context.Context, electionID, voterID int64, preferredMethod string, onlineAllowed, tpsAllowed bool) error {
+	query := `
+		INSERT INTO voter_status (election_id, voter_id, is_eligible, has_voted, preferred_method, online_allowed, tps_allowed)
+		VALUES ($1,$2,TRUE,FALSE,$3,$4,$5)
+		ON CONFLICT (election_id, voter_id)
+		DO UPDATE SET preferred_method = EXCLUDED.preferred_method,
+		              online_allowed = EXCLUDED.online_allowed,
+		              tps_allowed = EXCLUDED.tps_allowed,
+		              updated_at = NOW()
+	`
+	_, err := r.db.Exec(ctx, query, electionID, voterID, preferredMethod, onlineAllowed, tpsAllowed)
 	return err
 }
