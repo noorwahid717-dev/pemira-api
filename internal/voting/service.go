@@ -453,13 +453,32 @@ func (s *Service) ScanCandidateAtTPS(ctx context.Context, authUser auth.AuthUser
 		return nil, ErrTPSNotFound
 	}
 
-	qr, err := parseBallotQR(req.Payload)
-	if err != nil {
-		return nil, ErrInvalidBallotQR
-	}
-
 	var result *VoteResultEntity
+	var err error
 	err = s.withTx(ctx, func(tx pgx.Tx) error {
+		var (
+			qr       *BallotQR
+			qrRecord *CandidateQR
+		)
+
+		// Resolve QR token: try table lookup first
+		qrRecord, _ = s.voteRepo.FindCandidateQRByToken(ctx, tx, req.Payload)
+		if qrRecord != nil {
+			qr = &BallotQR{
+				ElectionID:  qrRecord.ElectionID,
+				CandidateID: qrRecord.CandidateID,
+				Version:     qrRecord.Version,
+			}
+		} else {
+			parsed, err := parseBallotQR(req.Payload)
+			if err != nil {
+				return ErrInvalidBallotQR
+			}
+			qr = parsed
+			// Try resolve to candidate_qr_codes for metadata
+			qrRecord, _ = s.voteRepo.FindActiveCandidateQR(ctx, tx, qr.ElectionID, qr.CandidateID)
+		}
+
 		checkin, err := s.voteRepo.GetCheckinByID(ctx, tx, req.CheckinID)
 		if err != nil {
 			return translateNotFound(err, ErrTPSCheckinNotFound)
@@ -506,14 +525,43 @@ func (s *Service) ScanCandidateAtTPS(ctx context.Context, authUser auth.AuthUser
 		now := time.Now().UTC()
 		tokenHash := generateTokenHash(qr.ElectionID, checkin.VoterID)
 
+		// Insert ballot scan log with status APPLIED
+		scanStatus := "APPLIED"
+		payloadValid := true
+		var rejectedReason *string
+		var candidateQRID *int64
+		if qrRecord != nil {
+			candidateQRID = &qrRecord.ID
+		}
+		scan := &BallotScan{
+			ElectionID:      qr.ElectionID,
+			TPSID:           req.TPSID,
+			CheckinID:       checkin.ID,
+			VoterID:         checkin.VoterID,
+			CandidateID:     &qr.CandidateID,
+			CandidateQRID:   candidateQRID,
+			RawPayload:      req.Payload,
+			PayloadValid:    payloadValid,
+			Status:          scanStatus,
+			RejectedReason:  rejectedReason,
+			ScannedByUserID: authUser.ID,
+			ScannedAt:       now,
+		}
+
+		if err := s.voteRepo.InsertBallotScan(ctx, tx, scan); err != nil {
+			return err
+		}
+
 		// Insert vote
 		vote := &Vote{
-			ElectionID:  qr.ElectionID,
-			CandidateID: qr.CandidateID,
-			TokenHash:   tokenHash,
-			Channel:     "TPS",
-			TPSID:       &req.TPSID,
-			CastAt:      now,
+			ElectionID:    qr.ElectionID,
+			CandidateID:   qr.CandidateID,
+			TokenHash:     tokenHash,
+			Channel:       "TPS",
+			TPSID:         &req.TPSID,
+			CandidateQRID: candidateQRID,
+			BallotScanID:  &scan.ID,
+			CastAt:        now,
 		}
 		if err := s.voteRepo.InsertVote(ctx, tx, vote); err != nil {
 			return err

@@ -3,16 +3,17 @@ package tps
 import "time"
 
 const (
-	StatusDraft    = "DRAFT"
-	StatusActive   = "ACTIVE"
-	StatusClosed   = "CLOSED"
-	
+	StatusDraft  = "DRAFT"
+	StatusActive = "ACTIVE"
+	StatusClosed = "CLOSED"
+
 	CheckinStatusPending  = "PENDING"
 	CheckinStatusApproved = "APPROVED"
 	CheckinStatusRejected = "REJECTED"
 	CheckinStatusUsed     = "USED"
 	CheckinStatusExpired  = "EXPIRED"
-	
+	CheckinStatusVoted    = "VOTED"
+
 	RoleKetuaTPS      = "KETUA_TPS"
 	RoleOperatorPanel = "OPERATOR_PANEL"
 )
@@ -37,12 +38,12 @@ type TPS struct {
 }
 
 type TPSQR struct {
-	ID         int64      `json:"id"`
-	TPSID      int64      `json:"tps_id"`
-	QRToken    string     `json:"qr_token"`
-	IsActive   bool       `json:"is_active"`
-	RotatedAt  *time.Time `json:"rotated_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
+	ID        int64      `json:"id"`
+	TPSID     int64      `json:"tps_id"`
+	QRToken   string     `json:"qr_token"`
+	IsActive  bool       `json:"is_active"`
+	RotatedAt *time.Time `json:"rotated_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 type TPSPanitia struct {
@@ -64,14 +65,15 @@ type TPSCheckin struct {
 	ApprovedByID    *int64     `json:"approved_by_id"`
 	RejectionReason *string    `json:"rejection_reason"`
 	ExpiresAt       *time.Time `json:"expires_at"`
+	VotedAt         *time.Time `json:"voted_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type TPSStats struct {
-	TotalVotes        int `json:"total_votes"`
-	TotalCheckins     int `json:"total_checkins"`
-	PendingCheckins   int `json:"pending_checkins"`
-	ApprovedCheckins  int `json:"approved_checkins"`
-	RejectedCheckins  int `json:"rejected_checkins"`
+	TotalVotes       int `json:"total_votes"`
+	TotalCheckins    int `json:"total_checkins"`
+	PendingCheckins  int `json:"pending_checkins"`
+	ApprovedCheckins int `json:"approved_checkins"`
+	RejectedCheckins int `json:"rejected_checkins"`
 }
