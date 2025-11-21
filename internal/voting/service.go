@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -26,6 +27,12 @@ type Service struct {
 	voteRepo      VoteRepository
 	statsRepo     VoteStatsRepository
 	auditSvc      AuditService
+}
+
+type SetMethodRequest struct {
+	ElectionID int64
+	Method     string
+	TPSID      *int64
 }
 
 func NewService(repo Repository) *Service {
@@ -218,14 +225,14 @@ func (s *Service) castVote(
 			return translateNotFound(err, ErrCandidateNotFound)
 		}
 		if cand.ElectionID != electionID {
-		return ErrCandidateNotFound
-	}
-	// Note: IsActive field removed from Candidate struct
-	// if !cand.IsActive {
-	// 	return ErrCandidateInactive
-	// }
+			return ErrCandidateNotFound
+		}
+		// Note: IsActive field removed from Candidate struct
+		// if !cand.IsActive {
+		// 	return ErrCandidateInactive
+		// }
 
-	// 4. Generate token hash
+		// 4. Generate token hash
 		now := time.Now().UTC()
 		tokenHash := generateTokenHash(electionID, voterID)
 
@@ -362,4 +369,66 @@ func (s *Service) generateToken() (string, error) {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+// SetVoterMethod sets the preferred voting method (ONLINE or TPS) for a voter in a specific election.
+func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, req SetMethodRequest) error {
+	if s.db == nil {
+		return errors.New("service not initialized")
+	}
+
+	if authUser.Role != constants.RoleStudent || authUser.VoterID == nil {
+		return ErrVoterMappingMissing
+	}
+
+	voterID := *authUser.VoterID
+
+	// Validate method
+	method := strings.ToUpper(req.Method)
+	if method != "ONLINE" && method != "TPS" {
+		return ErrMethodNotAllowed
+	}
+
+	return s.withTx(ctx, func(tx pgx.Tx) error {
+		// Get election to validate status and channel availability
+		election, err := s.electionRepo.GetByID(ctx, req.ElectionID)
+		if err != nil {
+			return translateNotFound(err, ErrElectionNotFound)
+		}
+
+		if election.Status == "CLOSED" || election.Status == "ARCHIVED" {
+			return ErrElectionNotOpen
+		}
+
+		if method == "ONLINE" && !election.OnlineEnabled {
+			return ErrMethodNotAllowed
+		}
+		if method == "TPS" && !election.TPSEnabled {
+			return ErrMethodNotAllowed
+		}
+
+		// Lock voter_status row
+		status, err := s.voterRepo.GetStatusForUpdate(ctx, tx, req.ElectionID, voterID)
+		if err != nil {
+			return translateNotFound(err, ErrNotEligible)
+		}
+
+		if status.HasVoted {
+			return ErrAlreadyVoted
+		}
+
+		var tpsID *int64
+		if method == "TPS" {
+			if req.TPSID == nil || *req.TPSID <= 0 {
+				return ErrTPSNotFound
+			}
+			id := *req.TPSID
+			tpsID = &id
+		}
+
+		status.VotingMethod = &method
+		status.TPSID = tpsID
+
+		return s.voterRepo.UpdateStatus(ctx, tx, status)
+	})
 }
