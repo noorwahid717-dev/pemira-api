@@ -70,9 +70,6 @@ func (h *Handler) GetMeStatus(w http.ResponseWriter, r *http.Request) {
 	dto, err := h.svc.GetMeStatus(ctx, authUser, electionID)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrUnauthorizedRole):
-			response.Forbidden(w, "FORBIDDEN", "Hanya mahasiswa yang dapat mengakses status pemilih.")
-			return
 		case errors.Is(err, ErrVoterMappingMissing):
 			response.Forbidden(w, "VOTER_MAPPING_MISSING", "Akun ini belum terhubung dengan data pemilih.")
 			return
