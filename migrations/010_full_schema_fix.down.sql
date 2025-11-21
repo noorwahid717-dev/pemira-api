@@ -1,0 +1,2 @@
+-- +goose Down
+-- No-op down migration (schema fix is additive)
