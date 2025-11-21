@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -39,6 +40,17 @@ type ScanCandidateRequest struct {
 	TPSID     int64
 	CheckinID int64
 	Payload   string
+}
+
+// Voter TPS QR request/response
+type VoterQRResult struct {
+	ID         int64      `json:"id"`
+	VoterID    int64      `json:"voter_id"`
+	ElectionID int64      `json:"election_id"`
+	QRToken    string     `json:"qr_token"`
+	IsActive   bool       `json:"is_active"`
+	RotatedAt  *time.Time `json:"rotated_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 func NewService(repo Repository) *Service {
@@ -224,6 +236,12 @@ func (s *Service) castVote(
 		if vs.HasVoted {
 			return ErrAlreadyVoted
 		}
+		if channel == "ONLINE" && !vs.OnlineAllowed {
+			return ErrMethodNotAllowed
+		}
+		if channel == "TPS" && !vs.TPSAllowed {
+			return ErrMethodNotAllowed
+		}
 
 		// 3. Get and validate candidate
 		cand, err := s.candidateRepo.GetByIDWithTx(ctx, tx, candidateID)
@@ -377,6 +395,90 @@ func stringPtr(s string) *string {
 	return &s
 }
 
+func generateVoterQRToken(voterID, electionID int64) (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("vqr_%x_%d_%d", bytes[:4], electionID, voterID), nil
+}
+
+// GetVoterTPSQR returns active QR (generate if rotate=true or not found).
+func (s *Service) GetVoterTPSQR(ctx context.Context, authUser auth.AuthUser, voterID, electionID int64, rotate bool) (*VoterQRResult, error) {
+	if s.db == nil {
+		return nil, errors.New("service not initialized")
+	}
+
+	if authUser.Role != constants.RoleStudent && authUser.Role != constants.RoleAdmin {
+		return nil, ErrNotEligible
+	}
+	if authUser.Role == constants.RoleStudent {
+		if authUser.VoterID == nil || *authUser.VoterID != voterID {
+			return nil, ErrNotEligible
+		}
+	}
+
+	election, err := s.electionRepo.GetByID(ctx, electionID)
+	if err != nil {
+		return nil, translateNotFound(err, ErrElectionNotFound)
+	}
+	if !election.TPSEnabled {
+		return nil, ErrModeNotAllowed
+	}
+
+	var result *VoterQRResult
+	err = s.withTx(ctx, func(tx pgx.Tx) error {
+		status, err := s.voterRepo.GetStatusForUpdate(ctx, tx, electionID, voterID)
+		if err != nil {
+			// create status with TPS allowed
+			status, err = s.voterRepo.EnsureStatus(ctx, tx, electionID, voterID, "TPS", false, true)
+			if err != nil {
+				return err
+			}
+		}
+		if !status.TPSAllowed {
+			return ErrModeNotAllowed
+		}
+
+		activeQR, _ := s.voteRepo.GetActiveVoterQR(ctx, tx, voterID, electionID)
+		if rotate && activeQR != nil {
+			_ = s.voteRepo.DeactivateVoterQR(ctx, tx, activeQR.ID, time.Now().UTC())
+			activeQR = nil
+		}
+
+		if activeQR == nil {
+			token, gerr := generateVoterQRToken(voterID, electionID)
+			if gerr != nil {
+				return gerr
+			}
+			qr := &VoterTPSQR{
+				VoterID:    voterID,
+				ElectionID: electionID,
+				QRToken:    token,
+				IsActive:   true,
+				CreatedAt:  time.Now().UTC(),
+			}
+			if err := s.voteRepo.InsertVoterQR(ctx, tx, qr); err != nil {
+				return err
+			}
+			activeQR = qr
+		}
+
+		result = &VoterQRResult{
+			ID:         activeQR.ID,
+			VoterID:    activeQR.VoterID,
+			ElectionID: activeQR.ElectionID,
+			QRToken:    activeQR.QRToken,
+			IsActive:   activeQR.IsActive,
+			RotatedAt:  activeQR.RotatedAt,
+			CreatedAt:  activeQR.CreatedAt,
+		}
+		return nil
+	})
+
+	return result, err
+}
+
 // SetVoterMethod sets the preferred voting method (ONLINE or TPS) for a voter in a specific election.
 func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, req SetMethodRequest) error {
 	if s.db == nil {
@@ -413,10 +515,13 @@ func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, re
 			return ErrMethodNotAllowed
 		}
 
-		// Lock voter_status row
+		// Lock voter_status row (create if missing)
 		status, err := s.voterRepo.GetStatusForUpdate(ctx, tx, req.ElectionID, voterID)
 		if err != nil {
-			return translateNotFound(err, ErrNotEligible)
+			status, err = s.voterRepo.EnsureStatus(ctx, tx, req.ElectionID, voterID, method, method == "ONLINE", method == "TPS")
+			if err != nil {
+				return translateNotFound(err, ErrNotEligible)
+			}
 		}
 
 		if status.HasVoted {
@@ -434,6 +539,9 @@ func (s *Service) SetVoterMethod(ctx context.Context, authUser auth.AuthUser, re
 
 		status.VotingMethod = &method
 		status.TPSID = tpsID
+		status.PreferredMethod = &method
+		status.OnlineAllowed = method == "ONLINE"
+		status.TPSAllowed = method == "TPS"
 
 		return s.voterRepo.UpdateStatus(ctx, tx, status)
 	})
@@ -514,6 +622,9 @@ func (s *Service) ScanCandidateAtTPS(ctx context.Context, authUser auth.AuthUser
 		}
 		if status.HasVoted {
 			return ErrAlreadyVoted
+		}
+		if !status.TPSAllowed {
+			return ErrMethodNotAllowed
 		}
 
 		// Validate candidate belongs to election

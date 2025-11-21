@@ -16,6 +16,7 @@ var (
 	ErrInvalidRefreshToken = errors.New("invalid or expired refresh token")
 	ErrInvalidRegisterType = errors.New("invalid registration type")
 	ErrInvalidRegistration = errors.New("invalid registration data")
+	ErrModeNotAvailable    = errors.New("voting mode not available")
 )
 
 type AuthService struct {
@@ -65,6 +66,19 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		return nil, err
 	}
 
+	// Determine registration election & mode (default ONLINE)
+	mode := normalizeVotingMode(req.VotingMode)
+	regElection, err := s.repo.FindOrCreateRegistrationElection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if mode == "ONLINE" && !regElection.OnlineEnabled {
+		return nil, ErrModeNotAvailable
+	}
+	if mode == "TPS" && !regElection.TPSEnabled {
+		return nil, ErrModeNotAvailable
+	}
+
 	user, err := s.repo.CreateUserAccount(ctx, &UserAccount{
 		Username:     nim,
 		Email:        email,
@@ -79,6 +93,11 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		return nil, err
 	}
 
+	// Upsert voter_status preference/allowed flags
+	onlineAllowed := mode == "ONLINE"
+	tpsAllowed := mode == "TPS"
+	_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
+
 	profile := &UserProfile{
 		Name:             name,
 		FacultyName:      req.FacultyName,
@@ -92,6 +111,7 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 		Role:     user.Role,
 		VoterID:  user.VoterID,
 		Profile:  profile,
+		// voting_mode echoed for client convenience
 	}, nil
 }
 
@@ -435,4 +455,12 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, userID int64) (*AuthUs
 		TPSID:    user.TPSID,
 		Profile:  profile,
 	}, nil
+}
+
+func normalizeVotingMode(input string) string {
+	mode := strings.ToUpper(strings.TrimSpace(input))
+	if mode == "TPS" {
+		return "TPS"
+	}
+	return "ONLINE"
 }

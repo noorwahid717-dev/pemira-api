@@ -80,8 +80,9 @@ func (h *AuthHandler) RegisterStudent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusCreated, map[string]interface{}{
-		"user":    user,
-		"message": "Registrasi mahasiswa berhasil.",
+		"user":        user,
+		"message":     "Registrasi mahasiswa berhasil.",
+		"voting_mode": normalizeVotingMode(req.VotingMode),
 	})
 }
 
@@ -100,8 +101,9 @@ func (h *AuthHandler) RegisterLecturerStaff(w http.ResponseWriter, r *http.Reque
 	}
 
 	response.JSON(w, http.StatusCreated, map[string]interface{}{
-		"user":    user,
-		"message": "Registrasi berhasil.",
+		"user":        user,
+		"message":     "Registrasi berhasil.",
+		"voting_mode": normalizeVotingMode(req.VotingMode),
 	})
 }
 
@@ -200,6 +202,9 @@ func (h *AuthHandler) handleError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, ErrInvalidRegistration):
 		response.UnprocessableEntity(w, "VALIDATION_ERROR", "Data registrasi tidak lengkap atau tidak valid.")
+
+	case errors.Is(err, ErrModeNotAvailable):
+		response.UnprocessableEntity(w, "MODE_NOT_AVAILABLE", "Mode tidak tersedia untuk pemilu ini.")
 
 	default:
 		// Log internal error

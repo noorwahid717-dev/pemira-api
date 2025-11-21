@@ -47,6 +47,7 @@ type RegisterStudentRequest struct {
 	StudyProgramName string `json:"study_program_name"`
 	CohortYear       *int   `json:"cohort_year,omitempty"`
 	Password         string `json:"password"`
+	VotingMode       string `json:"voting_mode,omitempty"` // ONLINE | TPS
 }
 
 // RegisterLecturerStaffRequest represents lecturer/staff registration payload
@@ -61,6 +62,7 @@ type RegisterLecturerStaffRequest struct {
 	UnitName       string `json:"unit_name,omitempty"`
 	Position       string `json:"position,omitempty"`
 	Password       string `json:"password"`
+	VotingMode     string `json:"voting_mode,omitempty"` // ONLINE | TPS (optional)
 }
 
 // VoterRegistration contains data needed to create a voter row

@@ -161,6 +161,10 @@ func main() {
 			// Election routes (authenticated)
 			r.Get("/elections/{electionID}/me/status", electionHandler.GetMeStatus)
 
+			// Voter TPS QR (student/admin)
+			r.Get("/voters/{voterID}/tps/qr", votingHandler.GetVoterTPSQR)
+			r.Post("/voters/{voterID}/tps/qr", votingHandler.GenerateVoterTPSQR)
+
 			// Voting routes (student only)
 			r.Group(func(r chi.Router) {
 				r.Use(httpMiddleware.AuthStudentOnly(jwtManager))

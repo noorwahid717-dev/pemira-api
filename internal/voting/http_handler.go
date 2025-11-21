@@ -48,6 +48,10 @@ type scanCandidateRequest struct {
 	BallotQRPayload string `json:"ballot_qr_payload"`
 }
 
+type voterQRRequest struct {
+	ElectionID int64 `json:"election_id"`
+}
+
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/online/cast", h.CastOnlineVote)
 	r.Post("/voting/tps/cast", h.CastTPSVote)
@@ -56,6 +60,10 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/method", h.SetVoterMethod)
 	r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", h.ScanTPSCandidate)
 	r.Post("/tps/ballots/parse-qr", h.ParseBallotQR)
+
+	// Voter TPS QR (student)
+	r.Get("/voters/{voterID}/tps/qr", h.GetVoterTPSQR)
+	r.Post("/voters/{voterID}/tps/qr", h.GenerateVoterTPSQR)
 }
 
 // POST /voting/online/cast
@@ -287,6 +295,67 @@ func (h *Handler) ParseBallotQR(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, qr)
 }
 
+// GET /voters/{voterID}/tps/qr
+func (h *Handler) GetVoterTPSQR(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	voterID, err := strconv.ParseInt(chi.URLParam(r, "voterID"), 10, 64)
+	if err != nil || voterID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
+		return
+	}
+	electionID, _ := strconv.ParseInt(r.URL.Query().Get("election_id"), 10, 64)
+	if electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "election_id wajib diisi.")
+		return
+	}
+
+	qr, err := h.service.GetVoterTPSQR(ctx, authUser, voterID, electionID, false)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, qr)
+}
+
+// POST /voters/{voterID}/tps/qr
+func (h *Handler) GenerateVoterTPSQR(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	voterID, err := strconv.ParseInt(chi.URLParam(r, "voterID"), 10, 64)
+	if err != nil || voterID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
+		return
+	}
+
+	var req voterQRRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+	if req.ElectionID <= 0 {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "election_id wajib diisi.")
+		return
+	}
+
+	qr, err := h.service.GetVoterTPSQR(ctx, authUser, voterID, req.ElectionID, true)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	response.JSON(w, http.StatusOK, qr)
+}
+
 // handleError maps domain errors to HTTP responses
 func (h *Handler) handleError(w http.ResponseWriter, err error) {
 	switch {
@@ -331,6 +400,9 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 
 	case errors.Is(err, ErrElectionMismatch):
 		response.BadRequest(w, "ELECTION_MISMATCH", "Kode QR tidak sesuai dengan pemilu di TPS ini.")
+
+	case errors.Is(err, ErrModeNotAllowed):
+		response.UnprocessableEntity(w, "MODE_NOT_AVAILABLE", "Mode voting tidak tersedia.")
 
 	default:
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")

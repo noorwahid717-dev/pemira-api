@@ -6,12 +6,13 @@ import (
 )
 
 var (
-	ErrUserNotFound    = errors.New("user not found")
-	ErrSessionNotFound = errors.New("session not found")
-	ErrUsernameExists  = errors.New("username already exists")
-	ErrNIMExists       = errors.New("nim already exists")
-	ErrNIDNExists      = errors.New("nidn already exists")
-	ErrNIPExists       = errors.New("nip already exists")
+	ErrUserNotFound        = errors.New("user not found")
+	ErrSessionNotFound     = errors.New("session not found")
+	ErrUsernameExists      = errors.New("username already exists")
+	ErrNIMExists           = errors.New("nim already exists")
+	ErrNIDNExists          = errors.New("nidn already exists")
+	ErrNIPExists           = errors.New("nip already exists")
+	ErrElectionUnavailable = errors.New("no active election for registration")
 )
 
 type Repository interface {
@@ -37,4 +38,10 @@ type Repository interface {
 	DeleteLecturer(ctx context.Context, lecturerID int64) error
 	CreateStaff(ctx context.Context, staff StaffRegistration) (int64, error)
 	DeleteStaff(ctx context.Context, staffID int64) error
+
+	// Election helpers for registration
+	FindOrCreateRegistrationElection(ctx context.Context) (*RegistrationElection, error)
+
+	// Voter status helpers
+	EnsureVoterStatus(ctx context.Context, electionID, voterID int64, preferredMethod string, onlineAllowed, tpsAllowed bool) error
 }

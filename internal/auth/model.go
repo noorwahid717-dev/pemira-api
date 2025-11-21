@@ -35,6 +35,14 @@ type UserSession struct {
 	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
 }
 
+// RegistrationElection is a lightweight projection used during registration.
+type RegistrationElection struct {
+	ID            int64  `json:"id"`
+	Status        string `json:"status"`
+	OnlineEnabled bool   `json:"online_enabled"`
+	TPSEnabled    bool   `json:"tps_enabled"`
+}
+
 // UserProfile captures optional profile data shown in auth responses.
 type UserProfile struct {
 	Name             string `json:"name,omitempty"`

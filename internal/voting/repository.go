@@ -16,6 +16,9 @@ type VoterRepository interface {
 
 	// UpdateStatus updates voter status
 	UpdateStatus(ctx context.Context, tx pgx.Tx, status *VoterStatusEntity) error
+
+	// EnsureStatus inserts/updates voter_status with preferred/allowed flags
+	EnsureStatus(ctx context.Context, tx pgx.Tx, electionID, voterID int64, preferred string, onlineAllowed, tpsAllowed bool) (*VoterStatusEntity, error)
 }
 
 // CandidateRepository handles candidate operations within transaction
@@ -53,6 +56,11 @@ type VoteRepository interface {
 
 	// Ballot scan logging
 	InsertBallotScan(ctx context.Context, tx pgx.Tx, scan *BallotScan) error
+
+	// Voter TPS QR
+	GetActiveVoterQR(ctx context.Context, tx pgx.Tx, voterID, electionID int64) (*VoterTPSQR, error)
+	DeactivateVoterQR(ctx context.Context, tx pgx.Tx, qrID int64, rotatedAt time.Time) error
+	InsertVoterQR(ctx context.Context, tx pgx.Tx, qr *VoterTPSQR) error
 }
 
 // VoteStatsRepository handles vote statistics (optional, for read-model)

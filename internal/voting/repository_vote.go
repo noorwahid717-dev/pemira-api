@@ -248,6 +248,53 @@ func (r *voteRepository) InsertBallotScan(ctx context.Context, tx pgx.Tx, scan *
 	return nil
 }
 
+func (r *voteRepository) GetActiveVoterQR(ctx context.Context, tx pgx.Tx, voterID, electionID int64) (*VoterTPSQR, error) {
+	query := `
+		SELECT id, voter_id, election_id, qr_token, is_active, rotated_at, created_at
+		FROM voter_tps_qr
+		WHERE voter_id = $1 AND election_id = $2 AND is_active = TRUE
+		LIMIT 1
+	`
+	var qr VoterTPSQR
+	err := tx.QueryRow(ctx, query, voterID, electionID).Scan(
+		&qr.ID,
+		&qr.VoterID,
+		&qr.ElectionID,
+		&qr.QRToken,
+		&qr.IsActive,
+		&qr.RotatedAt,
+		&qr.CreatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, shared.ErrNotFound
+		}
+		return nil, fmt.Errorf("get voter qr: %w", err)
+	}
+	return &qr, nil
+}
+
+func (r *voteRepository) DeactivateVoterQR(ctx context.Context, tx pgx.Tx, qrID int64, rotatedAt time.Time) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE voter_tps_qr
+		SET is_active = FALSE, rotated_at = $2
+		WHERE id = $1
+	`, qrID, rotatedAt)
+	return err
+}
+
+func (r *voteRepository) InsertVoterQR(ctx context.Context, tx pgx.Tx, qr *VoterTPSQR) error {
+	err := tx.QueryRow(ctx, `
+		INSERT INTO voter_tps_qr (voter_id, election_id, qr_token, is_active, rotated_at, created_at)
+		VALUES ($1,$2,$3,TRUE,NULL,COALESCE($4,NOW()))
+		RETURNING id, created_at
+	`, qr.VoterID, qr.ElectionID, qr.QRToken, qr.CreatedAt).Scan(&qr.ID, &qr.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("insert voter qr: %w", err)
+	}
+	return nil
+}
+
 // GetCheckinByID returns checkin by ID with lock
 func (r *voteRepository) GetCheckinByID(ctx context.Context, tx pgx.Tx, checkinID int64) (*tps.TPSCheckin, error) {
 	query := `
