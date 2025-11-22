@@ -201,7 +201,7 @@ func (r *PgRepository) CreateSession(ctx context.Context, session *UserSession) 
 	query := `
 		INSERT INTO user_sessions (user_id, refresh_token_hash, user_agent, ip_address, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+		RETURNING id, user_id, refresh_token_hash, user_agent, ip_address::text, created_at, expires_at, revoked_at
 	`
 
 	var created UserSession
@@ -232,7 +232,7 @@ func (r *PgRepository) CreateSession(ctx context.Context, session *UserSession) 
 // GetSessionByTokenHash retrieves a session by refresh token hash
 func (r *PgRepository) GetSessionByTokenHash(ctx context.Context, tokenHash string) (*UserSession, error) {
 	query := `
-		SELECT id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+		SELECT id, user_id, refresh_token_hash, user_agent, ip_address::text, created_at, expires_at, revoked_at
 		FROM user_sessions
 		WHERE refresh_token_hash = $1
 	`
@@ -262,7 +262,7 @@ func (r *PgRepository) GetSessionByTokenHash(ctx context.Context, tokenHash stri
 // GetUserSessions retrieves all sessions for a user
 func (r *PgRepository) GetUserSessions(ctx context.Context, userID int64) ([]UserSession, error) {
 	query := `
-		SELECT id, user_id, refresh_token_hash, user_agent, ip_address, created_at, expires_at, revoked_at
+		SELECT id, user_id, refresh_token_hash, user_agent, ip_address::text, created_at, expires_at, revoked_at
 		FROM user_sessions
 		WHERE user_id = $1
 		ORDER BY created_at DESC

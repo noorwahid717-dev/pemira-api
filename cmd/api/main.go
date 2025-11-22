@@ -23,6 +23,7 @@ import (
 	"pemira-api/internal/election"
 	httpMiddleware "pemira-api/internal/http/middleware"
 	"pemira-api/internal/http/response"
+	"pemira-api/internal/monitoring"
 	"pemira-api/internal/tps"
 	"pemira-api/internal/voting"
 	"pemira-api/internal/ws"
@@ -57,6 +58,7 @@ func main() {
 	tpsAdminRepo := tps.NewPgAdminRepository(pool)
 	candidatePgRepo := candidate.NewPgCandidateRepository(pool)
 	candidateStatsProvider := candidate.NewPgStatsProvider(pool)
+	monitoringRepo := monitoring.NewPgRepository(pool)
 
 	voterRepo := voting.NewVoterRepository()
 	candidateRepo := voting.NewCandidateRepository()
@@ -78,6 +80,7 @@ func main() {
 	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
 	candidateService := candidate.NewService(candidatePgRepo, candidateStatsProvider)
 	candidateHandler := candidate.NewHandler(candidateService)
+	monitoringService := monitoring.NewService(monitoringRepo)
 
 	votingService := voting.NewVotingService(
 		pool,
@@ -97,6 +100,7 @@ func main() {
 	dptHandler := dpt.NewHandler(dptService)
 	tpsAdminHandler := tps.NewAdminHandler(tpsAdminService)
 	candidateAdminHandler := candidate.NewAdminHandler(candidateService)
+	monitoringHandler := monitoring.NewHandler(monitoringService)
 
 	logger.Info("services initialized successfully")
 
@@ -210,6 +214,9 @@ func main() {
 					// TPS monitoring per election
 					r.Get("/{electionID}/tps/monitor", tpsAdminHandler.Monitor)
 				})
+
+				// Monitoring (counts/participation)
+				monitoringHandler.RegisterRoutes(r)
 
 				// TPS management
 				r.Route("/admin/tps", func(r chi.Router) {

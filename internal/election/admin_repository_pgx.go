@@ -61,8 +61,20 @@ SELECT
     name,
     code,
     status,
+    registration_start_at,
+    registration_end_at,
+    verification_start_at,
+    verification_end_at,
+    campaign_start_at,
+    campaign_end_at,
+    quiet_start_at,
+    quiet_end_at,
     voting_start_at,
     voting_end_at,
+    recap_start_at,
+    recap_end_at,
+    announcement_at,
+    finished_at,
     online_enabled,
     tps_enabled,
     created_at,
@@ -90,8 +102,20 @@ LIMIT $%d OFFSET $%d
 			&dto.Name,
 			&dto.Slug,
 			&dto.Status,
+			&dto.RegistrationStartAt,
+			&dto.RegistrationEndAt,
+			&dto.VerificationStartAt,
+			&dto.VerificationEndAt,
+			&dto.CampaignStartAt,
+			&dto.CampaignEndAt,
+			&dto.QuietStartAt,
+			&dto.QuietEndAt,
 			&dto.VotingStartAt,
 			&dto.VotingEndAt,
+			&dto.RecapStartAt,
+			&dto.RecapEndAt,
+			&dto.AnnouncementAt,
+			&dto.FinishedAt,
 			&dto.OnlineEnabled,
 			&dto.TPSEnabled,
 			&dto.CreatedAt,
@@ -118,8 +142,20 @@ SELECT
     name,
     code,
     status,
+    registration_start_at,
+    registration_end_at,
+    verification_start_at,
+    verification_end_at,
+    campaign_start_at,
+    campaign_end_at,
+    quiet_start_at,
+    quiet_end_at,
     voting_start_at,
     voting_end_at,
+    recap_start_at,
+    recap_end_at,
+    announcement_at,
+    finished_at,
     online_enabled,
     tps_enabled,
     created_at,
@@ -134,8 +170,20 @@ WHERE id = $1
 		&dto.Name,
 		&dto.Slug,
 		&dto.Status,
+		&dto.RegistrationStartAt,
+		&dto.RegistrationEndAt,
+		&dto.VerificationStartAt,
+		&dto.VerificationEndAt,
+		&dto.CampaignStartAt,
+		&dto.CampaignEndAt,
+		&dto.QuietStartAt,
+		&dto.QuietEndAt,
 		&dto.VotingStartAt,
 		&dto.VotingEndAt,
+		&dto.RecapStartAt,
+		&dto.RecapEndAt,
+		&dto.AnnouncementAt,
+		&dto.FinishedAt,
 		&dto.OnlineEnabled,
 		&dto.TPSEnabled,
 		&dto.CreatedAt,
@@ -162,7 +210,13 @@ INSERT INTO elections (
 ) VALUES ($1, $2, $3, 'DRAFT', $4, $5)
 RETURNING
     id, year, name, code, status,
+    registration_start_at, registration_end_at,
+    verification_start_at, verification_end_at,
+    campaign_start_at, campaign_end_at,
+    quiet_start_at, quiet_end_at,
     voting_start_at, voting_end_at,
+    recap_start_at, recap_end_at,
+    announcement_at, finished_at,
     online_enabled, tps_enabled,
     created_at, updated_at
 `
@@ -179,8 +233,20 @@ RETURNING
 		&dto.Name,
 		&dto.Slug,
 		&dto.Status,
+		&dto.RegistrationStartAt,
+		&dto.RegistrationEndAt,
+		&dto.VerificationStartAt,
+		&dto.VerificationEndAt,
+		&dto.CampaignStartAt,
+		&dto.CampaignEndAt,
+		&dto.QuietStartAt,
+		&dto.QuietEndAt,
 		&dto.VotingStartAt,
 		&dto.VotingEndAt,
+		&dto.RecapStartAt,
+		&dto.RecapEndAt,
+		&dto.AnnouncementAt,
+		&dto.FinishedAt,
 		&dto.OnlineEnabled,
 		&dto.TPSEnabled,
 		&dto.CreatedAt,
@@ -227,6 +293,77 @@ func (r *PgAdminRepository) UpdateElection(ctx context.Context, id int64, req Ad
 		argPos++
 	}
 
+	if req.RegistrationStartAt != nil {
+		updates = append(updates, fmt.Sprintf("registration_start_at = $%d", argPos))
+		args = append(args, *req.RegistrationStartAt)
+		argPos++
+	}
+	if req.RegistrationEndAt != nil {
+		updates = append(updates, fmt.Sprintf("registration_end_at = $%d", argPos))
+		args = append(args, *req.RegistrationEndAt)
+		argPos++
+	}
+	if req.VerificationStartAt != nil {
+		updates = append(updates, fmt.Sprintf("verification_start_at = $%d", argPos))
+		args = append(args, *req.VerificationStartAt)
+		argPos++
+	}
+	if req.VerificationEndAt != nil {
+		updates = append(updates, fmt.Sprintf("verification_end_at = $%d", argPos))
+		args = append(args, *req.VerificationEndAt)
+		argPos++
+	}
+	if req.CampaignStartAt != nil {
+		updates = append(updates, fmt.Sprintf("campaign_start_at = $%d", argPos))
+		args = append(args, *req.CampaignStartAt)
+		argPos++
+	}
+	if req.CampaignEndAt != nil {
+		updates = append(updates, fmt.Sprintf("campaign_end_at = $%d", argPos))
+		args = append(args, *req.CampaignEndAt)
+		argPos++
+	}
+	if req.QuietStartAt != nil {
+		updates = append(updates, fmt.Sprintf("quiet_start_at = $%d", argPos))
+		args = append(args, *req.QuietStartAt)
+		argPos++
+	}
+	if req.QuietEndAt != nil {
+		updates = append(updates, fmt.Sprintf("quiet_end_at = $%d", argPos))
+		args = append(args, *req.QuietEndAt)
+		argPos++
+	}
+	if req.VotingStartAt != nil {
+		updates = append(updates, fmt.Sprintf("voting_start_at = $%d", argPos))
+		args = append(args, *req.VotingStartAt)
+		argPos++
+	}
+	if req.VotingEndAt != nil {
+		updates = append(updates, fmt.Sprintf("voting_end_at = $%d", argPos))
+		args = append(args, *req.VotingEndAt)
+		argPos++
+	}
+	if req.RecapStartAt != nil {
+		updates = append(updates, fmt.Sprintf("recap_start_at = $%d", argPos))
+		args = append(args, *req.RecapStartAt)
+		argPos++
+	}
+	if req.RecapEndAt != nil {
+		updates = append(updates, fmt.Sprintf("recap_end_at = $%d", argPos))
+		args = append(args, *req.RecapEndAt)
+		argPos++
+	}
+	if req.AnnouncementAt != nil {
+		updates = append(updates, fmt.Sprintf("announcement_at = $%d", argPos))
+		args = append(args, *req.AnnouncementAt)
+		argPos++
+	}
+	if req.FinishedAt != nil {
+		updates = append(updates, fmt.Sprintf("finished_at = $%d", argPos))
+		args = append(args, *req.FinishedAt)
+		argPos++
+	}
+
 	if len(updates) == 0 {
 		return r.GetElectionByID(ctx, id)
 	}
@@ -239,7 +376,13 @@ SET %s
 WHERE id = $%d
 RETURNING
     id, year, name, code, status,
+    registration_start_at, registration_end_at,
+    verification_start_at, verification_end_at,
+    campaign_start_at, campaign_end_at,
+    quiet_start_at, quiet_end_at,
     voting_start_at, voting_end_at,
+    recap_start_at, recap_end_at,
+    announcement_at, finished_at,
     online_enabled, tps_enabled,
     created_at, updated_at
 `, strings.Join(updates, ", "), argPos)
@@ -253,8 +396,20 @@ RETURNING
 		&dto.Name,
 		&dto.Slug,
 		&dto.Status,
+		&dto.RegistrationStartAt,
+		&dto.RegistrationEndAt,
+		&dto.VerificationStartAt,
+		&dto.VerificationEndAt,
+		&dto.CampaignStartAt,
+		&dto.CampaignEndAt,
+		&dto.QuietStartAt,
+		&dto.QuietEndAt,
 		&dto.VotingStartAt,
 		&dto.VotingEndAt,
+		&dto.RecapStartAt,
+		&dto.RecapEndAt,
+		&dto.AnnouncementAt,
+		&dto.FinishedAt,
 		&dto.OnlineEnabled,
 		&dto.TPSEnabled,
 		&dto.CreatedAt,
@@ -285,7 +440,13 @@ SET
 WHERE id = $1
 RETURNING
     id, year, name, code, status,
+    registration_start_at, registration_end_at,
+    verification_start_at, verification_end_at,
+    campaign_start_at, campaign_end_at,
+    quiet_start_at, quiet_end_at,
     voting_start_at, voting_end_at,
+    recap_start_at, recap_end_at,
+    announcement_at, finished_at,
     online_enabled, tps_enabled,
     created_at, updated_at
 `
@@ -301,8 +462,20 @@ RETURNING
 		&dto.Name,
 		&dto.Slug,
 		&dto.Status,
+		&dto.RegistrationStartAt,
+		&dto.RegistrationEndAt,
+		&dto.VerificationStartAt,
+		&dto.VerificationEndAt,
+		&dto.CampaignStartAt,
+		&dto.CampaignEndAt,
+		&dto.QuietStartAt,
+		&dto.QuietEndAt,
 		&dto.VotingStartAt,
 		&dto.VotingEndAt,
+		&dto.RecapStartAt,
+		&dto.RecapEndAt,
+		&dto.AnnouncementAt,
+		&dto.FinishedAt,
 		&dto.OnlineEnabled,
 		&dto.TPSEnabled,
 		&dto.CreatedAt,

@@ -29,6 +29,13 @@ func (s *Service) GetLiveCountSnapshot(ctx context.Context, electionID int64) (*
 	if err != nil {
 		return nil, err
 	}
+	// convert []*TPSStats -> []TPSStats for response
+	tpsStatsVal := make([]TPSStats, 0, len(tpsStats))
+	for _, s := range tpsStats {
+		if s != nil {
+			tpsStatsVal = append(tpsStatsVal, *s)
+		}
+	}
 
 	// Build candidate votes map
 	candidateVotes := make(map[int64]int64)
@@ -44,7 +51,7 @@ func (s *Service) GetLiveCountSnapshot(ctx context.Context, electionID int64) (*
 		TotalVotes:     totalVotes,
 		Participation:  *participation,
 		CandidateVotes: candidateVotes,
-		TPSStats:       tpsStats,
+		TPSStats:       tpsStatsVal,
 	}, nil
 }
 
@@ -55,11 +62,11 @@ func (s *Service) GetDashboardSummary(ctx context.Context, electionID int64) (ma
 	}
 
 	return map[string]interface{}{
-		"total_votes":      snapshot.TotalVotes,
-		"total_eligible":   snapshot.Participation.TotalEligible,
+		"total_votes":       snapshot.TotalVotes,
+		"total_eligible":    snapshot.Participation.TotalEligible,
 		"participation_pct": snapshot.Participation.ParticipationPct,
-		"candidate_votes":  snapshot.CandidateVotes,
-		"tps_count":        len(snapshot.TPSStats),
-		"last_updated":     snapshot.Timestamp,
+		"candidate_votes":   snapshot.CandidateVotes,
+		"tps_count":         len(snapshot.TPSStats),
+		"last_updated":      snapshot.Timestamp,
 	}, nil
 }
