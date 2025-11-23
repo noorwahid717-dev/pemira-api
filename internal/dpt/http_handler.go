@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -163,6 +164,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, pag, err := h.svc.List(ctx, electionID, filter, page, limit)
 	if err != nil {
+		slog.Error("failed to list voters", "error", err, "election_id", electionID)
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil daftar pemilih.")
 		return
 	}
@@ -251,12 +253,17 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 			lastTPSID = strconv.FormatInt(*v.Status.LastTPSID, 10)
 		}
 
+		cohortYear := ""
+		if v.CohortYear != nil {
+			cohortYear = strconv.Itoa(*v.CohortYear)
+		}
+
 		record := []string{
 			v.NIM,
 			v.Name,
 			v.FacultyName,
 			v.StudyProgramName,
-			strconv.Itoa(v.CohortYear),
+			cohortYear,
 			v.Email,
 			hasVoted,
 			lastChannel,
