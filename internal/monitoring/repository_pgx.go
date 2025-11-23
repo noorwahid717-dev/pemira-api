@@ -90,19 +90,37 @@ func (r *PgRepository) GetTPSStats(ctx context.Context, electionID int64) ([]*TP
 SELECT
     t.id AS tps_id,
     t.name AS tps_name,
+    t.code AS code,
     COALESCE(v.total_votes, 0) AS total_votes,
-    COALESCE(c.pending_checkins, 0) AS pending_checkins
+    COALESCE(c.total_checkins, 0) AS total_checkins,
+    COALESCE(c.approved_checkins, 0) AS approved_checkins,
+    COALESCE(c.pending_checkins, 0) AS pending_checkins,
+    CASE
+        WHEN v.last_vote_at IS NULL AND c.last_checkin_at IS NULL THEN NULL
+        ELSE GREATEST(
+            COALESCE(v.last_vote_at, TO_TIMESTAMP(0)),
+            COALESCE(c.last_checkin_at, TO_TIMESTAMP(0))
+        )
+    END AS last_activity_at
 FROM tps t
 LEFT JOIN (
-    SELECT tps_id, COUNT(*) AS total_votes
+    SELECT
+        tps_id,
+        COUNT(*) FILTER (WHERE channel = 'TPS') AS total_votes,
+        MAX(cast_at) FILTER (WHERE channel = 'TPS') AS last_vote_at
     FROM votes
     WHERE election_id = $1
     GROUP BY tps_id
 ) v ON v.tps_id = t.id
 LEFT JOIN (
-    SELECT tps_id, COUNT(*) AS pending_checkins
+    SELECT
+        tps_id,
+        COUNT(*) AS total_checkins,
+        COUNT(*) FILTER (WHERE status = 'APPROVED') AS approved_checkins,
+        COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_checkins,
+        MAX(GREATEST(scan_at, COALESCE(approved_at, scan_at), COALESCE(voted_at, scan_at))) AS last_checkin_at
     FROM tps_checkins
-    WHERE election_id = $1 AND status = 'PENDING'
+    WHERE election_id = $1
     GROUP BY tps_id
 ) c ON c.tps_id = t.id
 WHERE t.election_id = $1
