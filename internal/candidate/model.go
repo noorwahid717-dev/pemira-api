@@ -26,23 +26,25 @@ func (s CandidateStatus) IsValid() bool {
 
 // CandidateDetail represents a candidate entity with full details in the domain
 type CandidateDetail struct {
-	ID               int64  `json:"id"`
-	ElectionID       int64  `json:"election_id"`
-	Number           int    `json:"number"`
-	Name             string `json:"name"`
-	PhotoURL         string `json:"photo_url"`
-	ShortBio         string `json:"short_bio"`
-	LongBio          string `json:"long_bio"`
-	Tagline          string `json:"tagline"`
-	FacultyName      string `json:"faculty_name"`
-	StudyProgramName string `json:"study_program_name"`
-	CohortYear       *int   `json:"cohort_year,omitempty"`
+	ID               int64   `json:"id"`
+	ElectionID       int64   `json:"election_id"`
+	Number           int     `json:"number"`
+	Name             string  `json:"name"`
+	PhotoURL         string  `json:"photo_url"`
+	PhotoMediaID     *string `json:"photo_media_id,omitempty"`
+	ShortBio         string  `json:"short_bio"`
+	LongBio          string  `json:"long_bio"`
+	Tagline          string  `json:"tagline"`
+	FacultyName      string  `json:"faculty_name"`
+	StudyProgramName string  `json:"study_program_name"`
+	CohortYear       *int    `json:"cohort_year,omitempty"`
 
-	Vision       string        `json:"vision"`
-	Missions     []string      `json:"missions"`
-	MainPrograms []MainProgram `json:"main_programs"`
-	Media        Media         `json:"media"`
-	SocialLinks  []SocialLink  `json:"social_links"`
+	Vision       string               `json:"vision"`
+	Missions     []string             `json:"missions"`
+	MainPrograms []MainProgram        `json:"main_programs"`
+	Media        Media                `json:"media"`
+	MediaFiles   []CandidateMediaMeta `json:"media_files,omitempty"`
+	SocialLinks  []SocialLink         `json:"social_links"`
 
 	Status CandidateStatus `json:"status"`
 

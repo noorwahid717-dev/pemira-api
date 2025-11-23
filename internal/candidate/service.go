@@ -38,6 +38,7 @@ type CandidateListItemDTO struct {
 	Number           int            `json:"number"`
 	Name             string         `json:"name"`
 	PhotoURL         string         `json:"photo_url"`
+	PhotoMediaID     *string        `json:"photo_media_id,omitempty"`
 	ShortBio         string         `json:"short_bio"`
 	Tagline          string         `json:"tagline"`
 	FacultyName      string         `json:"faculty_name"`
@@ -48,24 +49,26 @@ type CandidateListItemDTO struct {
 
 // CandidateDetailDTO represents a candidate in detail view
 type CandidateDetailDTO struct {
-	ID               int64          `json:"id"`
-	ElectionID       int64          `json:"election_id"`
-	Number           int            `json:"number"`
-	Name             string         `json:"name"`
-	PhotoURL         string         `json:"photo_url"`
-	ShortBio         string         `json:"short_bio"`
-	LongBio          string         `json:"long_bio"`
-	Tagline          string         `json:"tagline"`
-	FacultyName      string         `json:"faculty_name"`
-	StudyProgramName string         `json:"study_program_name"`
-	CohortYear       *int           `json:"cohort_year,omitempty"`
-	Vision           string         `json:"vision"`
-	Missions         []string       `json:"missions"`
-	MainPrograms     []MainProgram  `json:"main_programs"`
-	Media            Media          `json:"media"`
-	SocialLinks      []SocialLink   `json:"social_links"`
-	Status           string         `json:"status"`
-	Stats            CandidateStats `json:"stats"`
+	ID               int64                `json:"id"`
+	ElectionID       int64                `json:"election_id"`
+	Number           int                  `json:"number"`
+	Name             string               `json:"name"`
+	PhotoURL         string               `json:"photo_url"`
+	PhotoMediaID     *string              `json:"photo_media_id,omitempty"`
+	ShortBio         string               `json:"short_bio"`
+	LongBio          string               `json:"long_bio"`
+	Tagline          string               `json:"tagline"`
+	FacultyName      string               `json:"faculty_name"`
+	StudyProgramName string               `json:"study_program_name"`
+	CohortYear       *int                 `json:"cohort_year,omitempty"`
+	Vision           string               `json:"vision"`
+	Missions         []string             `json:"missions"`
+	MainPrograms     []MainProgram        `json:"main_programs"`
+	Media            Media                `json:"media"`
+	MediaFiles       []CandidateMediaMeta `json:"media_files,omitempty"`
+	SocialLinks      []SocialLink         `json:"social_links"`
+	Status           string               `json:"status"`
+	Stats            CandidateStats       `json:"stats"`
 }
 
 // Pagination represents pagination metadata
@@ -120,6 +123,7 @@ func (s *Service) ListPublicCandidates(
 			Number:           c.Number,
 			Name:             c.Name,
 			PhotoURL:         c.PhotoURL,
+			PhotoMediaID:     c.PhotoMediaID,
 			ShortBio:         c.ShortBio,
 			Tagline:          c.Tagline,
 			FacultyName:      c.FacultyName,
@@ -172,6 +176,7 @@ func (s *Service) GetPublicCandidateDetail(
 		Number:           c.Number,
 		Name:             c.Name,
 		PhotoURL:         c.PhotoURL,
+		PhotoMediaID:     c.PhotoMediaID,
 		ShortBio:         c.ShortBio,
 		LongBio:          c.LongBio,
 		Tagline:          c.Tagline,
@@ -182,6 +187,7 @@ func (s *Service) GetPublicCandidateDetail(
 		Missions:         c.Missions,
 		MainPrograms:     c.MainPrograms,
 		Media:            c.Media,
+		MediaFiles:       c.MediaFiles,
 		SocialLinks:      c.SocialLinks,
 		Status:           string(c.Status),
 		Stats:            stats,
@@ -334,6 +340,7 @@ func (s *Service) AdminCreateCandidate(
 		Number:           created.Number,
 		Name:             created.Name,
 		PhotoURL:         created.PhotoURL,
+		PhotoMediaID:     created.PhotoMediaID,
 		ShortBio:         created.ShortBio,
 		LongBio:          created.LongBio,
 		Tagline:          created.Tagline,
@@ -344,6 +351,7 @@ func (s *Service) AdminCreateCandidate(
 		Missions:         created.Missions,
 		MainPrograms:     created.MainPrograms,
 		Media:            created.Media,
+		MediaFiles:       created.MediaFiles,
 		SocialLinks:      created.SocialLinks,
 		Status:           string(created.Status),
 		Stats:            stats,
@@ -360,6 +368,10 @@ func (s *Service) AdminGetCandidate(
 		return nil, err
 	}
 
+	if mediaFiles, err := s.repo.ListMediaMeta(ctx, candidateID); err == nil {
+		c.MediaFiles = mediaFiles
+	}
+
 	statsMap, _ := s.stats.GetCandidateStats(ctx, electionID)
 	stats := statsMap[c.ID]
 
@@ -369,6 +381,7 @@ func (s *Service) AdminGetCandidate(
 		Number:           c.Number,
 		Name:             c.Name,
 		PhotoURL:         c.PhotoURL,
+		PhotoMediaID:     c.PhotoMediaID,
 		ShortBio:         c.ShortBio,
 		LongBio:          c.LongBio,
 		Tagline:          c.Tagline,
@@ -379,6 +392,7 @@ func (s *Service) AdminGetCandidate(
 		Missions:         c.Missions,
 		MainPrograms:     c.MainPrograms,
 		Media:            c.Media,
+		MediaFiles:       c.MediaFiles,
 		SocialLinks:      c.SocialLinks,
 		Status:           string(c.Status),
 		Stats:            stats,
@@ -473,6 +487,7 @@ func (s *Service) AdminUpdateCandidate(
 		Number:           updated.Number,
 		Name:             updated.Name,
 		PhotoURL:         updated.PhotoURL,
+		PhotoMediaID:     updated.PhotoMediaID,
 		ShortBio:         updated.ShortBio,
 		LongBio:          updated.LongBio,
 		Tagline:          updated.Tagline,
@@ -483,6 +498,7 @@ func (s *Service) AdminUpdateCandidate(
 		Missions:         updated.Missions,
 		MainPrograms:     updated.MainPrograms,
 		Media:            updated.Media,
+		MediaFiles:       updated.MediaFiles,
 		SocialLinks:      updated.SocialLinks,
 		Status:           string(updated.Status),
 		Stats:            stats,
@@ -521,4 +537,28 @@ func (s *Service) AdminUnpublishCandidate(
 	}
 
 	return s.AdminGetCandidate(ctx, electionID, candidateID)
+}
+
+func (s *Service) UploadProfileMedia(ctx context.Context, candidateID int64, media CandidateMediaCreate) (*CandidateMedia, error) {
+	return s.repo.SaveProfileMedia(ctx, candidateID, media)
+}
+
+func (s *Service) GetProfileMedia(ctx context.Context, candidateID int64) (*CandidateMedia, error) {
+	return s.repo.GetProfileMedia(ctx, candidateID)
+}
+
+func (s *Service) DeleteProfileMedia(ctx context.Context, candidateID, adminID int64) error {
+	return s.repo.DeleteProfileMedia(ctx, candidateID, adminID)
+}
+
+func (s *Service) UploadMedia(ctx context.Context, candidateID int64, media CandidateMediaCreate) (*CandidateMedia, error) {
+	return s.repo.AddMedia(ctx, candidateID, media)
+}
+
+func (s *Service) GetMedia(ctx context.Context, candidateID int64, mediaID string) (*CandidateMedia, error) {
+	return s.repo.GetMedia(ctx, candidateID, mediaID)
+}
+
+func (s *Service) DeleteMedia(ctx context.Context, candidateID int64, mediaID string) error {
+	return s.repo.DeleteMedia(ctx, candidateID, mediaID)
 }

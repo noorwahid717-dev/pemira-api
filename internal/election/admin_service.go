@@ -100,3 +100,41 @@ func (s *AdminService) CloseVoting(ctx context.Context, id int64) (*AdminElectio
 	now := time.Now().UTC()
 	return s.repo.SetVotingStatus(ctx, id, ElectionStatusVotingClosed, nil, &now)
 }
+
+func (s *AdminService) GetBranding(ctx context.Context, electionID int64) (*BrandingSettings, error) {
+	if _, err := s.repo.GetElectionByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+	return s.repo.GetBranding(ctx, electionID)
+}
+
+func (s *AdminService) GetBrandingLogo(ctx context.Context, electionID int64, slot BrandingSlot) (*BrandingFile, error) {
+	if _, err := s.repo.GetElectionByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+	return s.repo.GetBrandingFile(ctx, electionID, slot)
+}
+
+func (s *AdminService) UploadBrandingLogo(
+	ctx context.Context,
+	electionID int64,
+	slot BrandingSlot,
+	file BrandingFileCreate,
+) (*BrandingFile, error) {
+	if _, err := s.repo.GetElectionByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+	return s.repo.SaveBrandingFile(ctx, electionID, slot, file)
+}
+
+func (s *AdminService) DeleteBrandingLogo(
+	ctx context.Context,
+	electionID int64,
+	slot BrandingSlot,
+	adminID int64,
+) (*BrandingSettings, error) {
+	if _, err := s.repo.GetElectionByID(ctx, electionID); err != nil {
+		return nil, err
+	}
+	return s.repo.DeleteBrandingFile(ctx, electionID, slot, adminID)
+}

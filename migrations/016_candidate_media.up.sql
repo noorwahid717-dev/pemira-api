@@ -1,0 +1,21 @@
+-- +goose Up
+-- Candidate media storage (BLOB) and profile photo reference
+
+CREATE TABLE IF NOT EXISTS candidate_media (
+    id UUID PRIMARY KEY,
+    candidate_id BIGINT NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+    slot TEXT NOT NULL CHECK (slot IN ('profile', 'poster', 'photo_extra', 'pdf_program', 'pdf_visimisi')),
+    file_name TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    size_bytes BIGINT NOT NULL,
+    data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by_admin_id BIGINT NULL REFERENCES user_accounts(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_media_candidate ON candidate_media (candidate_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_candidate_media_profile ON candidate_media (candidate_id) WHERE slot = 'profile';
+
+ALTER TABLE candidates
+    ADD COLUMN IF NOT EXISTS photo_media_id UUID NULL REFERENCES candidate_media(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS updated_by_admin_id BIGINT NULL REFERENCES user_accounts(id) ON DELETE SET NULL;

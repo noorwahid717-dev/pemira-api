@@ -489,3 +489,301 @@ RETURNING
 	}
 	return &dto, nil
 }
+
+func brandingColumn(slot BrandingSlot) (string, error) {
+	switch slot {
+	case BrandingSlotPrimary:
+		return "primary_logo_id", nil
+	case BrandingSlotSecondary:
+		return "secondary_logo_id", nil
+	default:
+		return "", ErrInvalidBrandingSlot
+	}
+}
+
+func (r *PgAdminRepository) ensureBrandingSettings(ctx context.Context, electionID int64) error {
+	_, err := r.db.Exec(ctx, `
+INSERT INTO branding_settings (election_id)
+VALUES ($1)
+ON CONFLICT (election_id) DO NOTHING
+`, electionID)
+	return err
+}
+
+func ensureBrandingSettingsTx(ctx context.Context, tx pgx.Tx, electionID int64) error {
+	_, err := tx.Exec(ctx, `
+INSERT INTO branding_settings (election_id)
+VALUES ($1)
+ON CONFLICT (election_id) DO NOTHING
+`, electionID)
+	return err
+}
+
+func (r *PgAdminRepository) GetBranding(ctx context.Context, electionID int64) (*BrandingSettings, error) {
+	if err := r.ensureBrandingSettings(ctx, electionID); err != nil {
+		return nil, err
+	}
+
+	const q = `
+SELECT
+    bs.primary_logo_id,
+    bs.secondary_logo_id,
+    bs.updated_at,
+    ua.id,
+    ua.username
+FROM branding_settings bs
+LEFT JOIN user_accounts ua ON ua.id = bs.updated_by_admin_id
+WHERE bs.election_id = $1
+`
+
+	var primaryID, secondaryID *string
+	var updatedAt time.Time
+	var updatedByID *int64
+	var updatedByUsername *string
+
+	err := r.db.QueryRow(ctx, q, electionID).Scan(
+		&primaryID,
+		&secondaryID,
+		&updatedAt,
+		&updatedByID,
+		&updatedByUsername,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	branding := &BrandingSettings{
+		PrimaryLogoID:   primaryID,
+		SecondaryLogoID: secondaryID,
+		UpdatedAt:       updatedAt,
+	}
+	if updatedByID != nil && updatedByUsername != nil {
+		branding.UpdatedBy = &BrandingUser{
+			ID:       *updatedByID,
+			Username: *updatedByUsername,
+		}
+	}
+
+	return branding, nil
+}
+
+func (r *PgAdminRepository) GetBrandingFile(ctx context.Context, electionID int64, slot BrandingSlot) (*BrandingFile, error) {
+	column, err := brandingColumn(slot)
+	if err != nil {
+		return nil, err
+	}
+
+	query := fmt.Sprintf(`
+SELECT
+    bf.id,
+    bf.election_id,
+    bf.slot,
+    bf.content_type,
+    bf.size_bytes,
+    bf.data,
+    bf.created_at,
+    bf.created_by_admin_id
+FROM branding_settings bs
+JOIN branding_files bf ON bf.id = bs.%s
+WHERE bs.election_id = $1
+`, column)
+
+	var file BrandingFile
+	err = r.db.QueryRow(ctx, query, electionID).Scan(
+		&file.ID,
+		&file.ElectionID,
+		&file.Slot,
+		&file.ContentType,
+		&file.SizeBytes,
+		&file.Data,
+		&file.CreatedAt,
+		&file.CreatedByID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrBrandingFileNotFound
+		}
+		return nil, err
+	}
+
+	return &file, nil
+}
+
+func (r *PgAdminRepository) SaveBrandingFile(
+	ctx context.Context,
+	electionID int64,
+	slot BrandingSlot,
+	file BrandingFileCreate,
+) (*BrandingFile, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := ensureBrandingSettingsTx(ctx, tx, electionID); err != nil {
+		return nil, err
+	}
+
+	var currentPrimaryID, currentSecondaryID *string
+	err = tx.QueryRow(ctx, `
+SELECT primary_logo_id, secondary_logo_id
+FROM branding_settings
+WHERE election_id = $1
+FOR UPDATE
+`, electionID).Scan(&currentPrimaryID, &currentSecondaryID)
+	if err != nil {
+		return nil, err
+	}
+
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+INSERT INTO branding_files (id, election_id, slot, content_type, size_bytes, data, created_by_admin_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING created_at
+`, file.ID, electionID, slot, file.ContentType, file.SizeBytes, file.Data, file.CreatedByID).Scan(&createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	var oldID *string
+	switch slot {
+	case BrandingSlotPrimary:
+		oldID = currentPrimaryID
+		_, err = tx.Exec(ctx, `
+UPDATE branding_settings
+SET primary_logo_id = $1,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE election_id = $3
+`, file.ID, file.CreatedByID, electionID)
+	case BrandingSlotSecondary:
+		oldID = currentSecondaryID
+		_, err = tx.Exec(ctx, `
+UPDATE branding_settings
+SET secondary_logo_id = $1,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE election_id = $3
+`, file.ID, file.CreatedByID, electionID)
+	default:
+		err = ErrInvalidBrandingSlot
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if oldID != nil && *oldID != file.ID {
+		if _, err := tx.Exec(ctx, `DELETE FROM branding_files WHERE id = $1`, *oldID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &BrandingFile{
+		ID:          file.ID,
+		ElectionID:  electionID,
+		Slot:        slot,
+		ContentType: file.ContentType,
+		SizeBytes:   file.SizeBytes,
+		Data:        file.Data,
+		CreatedAt:   createdAt,
+		CreatedByID: &file.CreatedByID,
+	}, nil
+}
+
+func (r *PgAdminRepository) DeleteBrandingFile(
+	ctx context.Context,
+	electionID int64,
+	slot BrandingSlot,
+	adminID int64,
+) (*BrandingSettings, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := ensureBrandingSettingsTx(ctx, tx, electionID); err != nil {
+		return nil, err
+	}
+
+	var primaryID, secondaryID *string
+	err = tx.QueryRow(ctx, `
+SELECT primary_logo_id, secondary_logo_id
+FROM branding_settings
+WHERE election_id = $1
+FOR UPDATE
+`, electionID).Scan(&primaryID, &secondaryID)
+	if err != nil {
+		return nil, err
+	}
+
+	var targetID *string
+	switch slot {
+	case BrandingSlotPrimary:
+		targetID = primaryID
+	case BrandingSlotSecondary:
+		targetID = secondaryID
+	default:
+		return nil, ErrInvalidBrandingSlot
+	}
+
+	var updatedPrimaryID, updatedSecondaryID *string
+	var updatedAt time.Time
+	var updatedByID *int64
+	var updatedByUsername *string
+
+	switch slot {
+	case BrandingSlotPrimary:
+		err = tx.QueryRow(ctx, `
+UPDATE branding_settings
+SET primary_logo_id = NULL,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE election_id = $1
+RETURNING primary_logo_id, secondary_logo_id, updated_at, updated_by_admin_id,
+    (SELECT username FROM user_accounts WHERE id = updated_by_admin_id)
+`, electionID, adminID).Scan(&updatedPrimaryID, &updatedSecondaryID, &updatedAt, &updatedByID, &updatedByUsername)
+	case BrandingSlotSecondary:
+		err = tx.QueryRow(ctx, `
+UPDATE branding_settings
+SET secondary_logo_id = NULL,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE election_id = $1
+RETURNING primary_logo_id, secondary_logo_id, updated_at, updated_by_admin_id,
+    (SELECT username FROM user_accounts WHERE id = updated_by_admin_id)
+`, electionID, adminID).Scan(&updatedPrimaryID, &updatedSecondaryID, &updatedAt, &updatedByID, &updatedByUsername)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if targetID != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM branding_files WHERE id = $1`, *targetID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	branding := &BrandingSettings{
+		PrimaryLogoID:   updatedPrimaryID,
+		SecondaryLogoID: updatedSecondaryID,
+		UpdatedAt:       updatedAt,
+	}
+	if updatedByID != nil && updatedByUsername != nil {
+		branding.UpdatedBy = &BrandingUser{
+			ID:       *updatedByID,
+			Username: *updatedByUsername,
+		}
+	}
+
+	return branding, nil
+}

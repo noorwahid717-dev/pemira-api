@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,6 +28,7 @@ election_id,
 number,
 name,
 photo_url,
+photo_media_id,
 short_bio,
 long_bio,
 tagline,
@@ -122,6 +124,7 @@ election_id,
 number,
 name,
 photo_url,
+photo_media_id,
 short_bio,
 long_bio,
 tagline,
@@ -138,6 +141,32 @@ created_at,
 updated_at
 FROM candidates
 WHERE election_id = $1 AND id = $2
+`
+
+const qGetCandidateByCandidateID = `
+SELECT
+id,
+election_id,
+number,
+name,
+photo_url,
+photo_media_id,
+short_bio,
+long_bio,
+tagline,
+faculty_name,
+study_program_name,
+cohort_year,
+vision,
+missions,
+main_programs,
+media,
+social_links,
+status,
+created_at,
+updated_at
+FROM candidates
+WHERE id = $1
 `
 
 // GetByID returns a single candidate by election and candidate ID
@@ -158,6 +187,21 @@ func (r *PgCandidateRepository) GetByID(
 	return &c, nil
 }
 
+func (r *PgCandidateRepository) GetByCandidateID(
+	ctx context.Context,
+	candidateID int64,
+) (*Candidate, error) {
+	row := r.db.QueryRow(ctx, qGetCandidateByCandidateID, candidateID)
+	c, err := scanCandidateRow(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrCandidateNotFound
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
 // scanCandidate scans a candidate from pgx.Rows
 func scanCandidate(rows pgx.Rows) (Candidate, error) {
 	var c Candidate
@@ -169,6 +213,7 @@ func scanCandidate(rows pgx.Rows) (Candidate, error) {
 		&c.Number,
 		&c.Name,
 		&c.PhotoURL,
+		&c.PhotoMediaID,
 		&c.ShortBio,
 		&c.LongBio,
 		&c.Tagline,
@@ -214,6 +259,7 @@ func scanCandidateRow(row pgx.Row) (Candidate, error) {
 		&c.Number,
 		&c.Name,
 		&c.PhotoURL,
+		&c.PhotoMediaID,
 		&c.ShortBio,
 		&c.LongBio,
 		&c.Tagline,
@@ -294,13 +340,13 @@ func logJSONError(err error) {
 
 const qCreateCandidate = `
 INSERT INTO candidates (
-election_id, number, name, photo_url, short_bio, long_bio, tagline,
+election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions,
-main_programs, media, social_links, status, created_at, updated_at
+main_programs, media, social_links, status, created_at, updated_at, updated_by_admin_id
 ) VALUES (
-$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW()
+$1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW(), NULL
 )
-RETURNING id, election_id, number, name, photo_url, short_bio, long_bio, tagline,
+RETURNING id, election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
 media, social_links, status, created_at, updated_at
 `
@@ -358,7 +404,7 @@ social_links = $16,
 status = $17,
 updated_at = NOW()
 WHERE election_id = $1 AND id = $2
-RETURNING id, election_id, number, name, photo_url, short_bio, long_bio, tagline,
+RETURNING id, election_id, number, name, photo_url, photo_media_id, short_bio, long_bio, tagline,
 faculty_name, study_program_name, cohort_year, vision, missions, main_programs,
 media, social_links, status, created_at, updated_at
 `
@@ -450,4 +496,278 @@ func (r *PgCandidateRepository) CheckNumberExists(ctx context.Context, electionI
 	var exists bool
 	err := r.db.QueryRow(ctx, qCheckNumberExists, electionID, number, excludeCandidateID).Scan(&exists)
 	return exists, err
+}
+
+func scanCandidateMedia(row pgx.Row) (*CandidateMedia, error) {
+	var media CandidateMedia
+	err := row.Scan(
+		&media.ID,
+		&media.CandidateID,
+		&media.Slot,
+		&media.FileName,
+		&media.ContentType,
+		&media.SizeBytes,
+		&media.Data,
+		&media.CreatedAt,
+		&media.CreatedByID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &media, nil
+}
+
+// SaveProfileMedia stores/replace profile media and updates photo_media_id
+func (r *PgCandidateRepository) SaveProfileMedia(
+	ctx context.Context,
+	candidateID int64,
+	media CandidateMediaCreate,
+) (*CandidateMedia, error) {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var existingProfileID *string
+	err = tx.QueryRow(ctx, `
+SELECT photo_media_id FROM candidates WHERE id = $1 FOR UPDATE
+`, candidateID).Scan(&existingProfileID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrCandidateNotFound
+		}
+		return nil, err
+	}
+
+	if existingProfileID != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM candidate_media WHERE id = $1`, *existingProfileID); err != nil {
+			return nil, err
+		}
+	}
+
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
+INSERT INTO candidate_media (id, candidate_id, slot, file_name, content_type, size_bytes, data, created_by_admin_id)
+VALUES ($1, $2, 'profile', $3, $4, $5, $6, $7)
+RETURNING created_at
+`, media.ID, candidateID, media.FileName, media.ContentType, media.SizeBytes, media.Data, media.CreatedByID).Scan(&createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(ctx, `
+UPDATE candidates
+SET photo_media_id = $1,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE id = $3
+`, media.ID, media.CreatedByID, candidateID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &CandidateMedia{
+		ID:          media.ID,
+		CandidateID: candidateID,
+		Slot:        CandidateMediaSlotProfile,
+		FileName:    media.FileName,
+		ContentType: media.ContentType,
+		SizeBytes:   media.SizeBytes,
+		Data:        media.Data,
+		CreatedAt:   createdAt,
+		CreatedByID: &media.CreatedByID,
+	}, nil
+}
+
+// GetProfileMedia retrieves profile media; 404 if missing
+func (r *PgCandidateRepository) GetProfileMedia(ctx context.Context, candidateID int64) (*CandidateMedia, error) {
+	var mediaID *string
+	err := r.db.QueryRow(ctx, `
+SELECT photo_media_id FROM candidates WHERE id = $1
+`, candidateID).Scan(&mediaID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrCandidateNotFound
+		}
+		return nil, err
+	}
+	if mediaID == nil {
+		return nil, ErrCandidateMediaNotFound
+	}
+
+	row := r.db.QueryRow(ctx, `
+SELECT id, candidate_id, slot, file_name, content_type, size_bytes, data, created_at, created_by_admin_id
+FROM candidate_media
+WHERE id = $1 AND candidate_id = $2
+`, *mediaID, candidateID)
+
+	media, err := scanCandidateMedia(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrCandidateMediaNotFound
+		}
+		return nil, err
+	}
+	return media, nil
+}
+
+// DeleteProfileMedia removes profile media and clears reference
+func (r *PgCandidateRepository) DeleteProfileMedia(ctx context.Context, candidateID int64, adminID int64) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var mediaID *string
+	err = tx.QueryRow(ctx, `
+SELECT photo_media_id FROM candidates WHERE id = $1 FOR UPDATE
+`, candidateID).Scan(&mediaID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return ErrCandidateNotFound
+		}
+		return err
+	}
+	if mediaID == nil {
+		return ErrCandidateMediaNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `
+UPDATE candidates
+SET photo_media_id = NULL,
+    updated_by_admin_id = $2,
+    updated_at = NOW()
+WHERE id = $1
+`, candidateID, adminID); err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM candidate_media WHERE id = $1`, *mediaID); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// AddMedia stores non-profile media
+func (r *PgCandidateRepository) AddMedia(ctx context.Context, candidateID int64, media CandidateMediaCreate) (*CandidateMedia, error) {
+	if media.Slot == CandidateMediaSlotProfile {
+		return nil, ErrInvalidCandidateMediaSlot
+	}
+
+	var exists bool
+	if err := r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM candidates WHERE id = $1)`, candidateID).Scan(&exists); err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrCandidateNotFound
+	}
+
+	var createdAt time.Time
+	err := r.db.QueryRow(ctx, `
+INSERT INTO candidate_media (id, candidate_id, slot, file_name, content_type, size_bytes, data, created_by_admin_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING created_at
+`, media.ID, candidateID, media.Slot, media.FileName, media.ContentType, media.SizeBytes, media.Data, media.CreatedByID).Scan(&createdAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CandidateMedia{
+		ID:          media.ID,
+		CandidateID: candidateID,
+		Slot:        media.Slot,
+		FileName:    media.FileName,
+		ContentType: media.ContentType,
+		SizeBytes:   media.SizeBytes,
+		Data:        media.Data,
+		CreatedAt:   createdAt,
+		CreatedByID: &media.CreatedByID,
+	}, nil
+}
+
+// GetMedia fetches any media by id scoped to candidate
+func (r *PgCandidateRepository) GetMedia(ctx context.Context, candidateID int64, mediaID string) (*CandidateMedia, error) {
+	row := r.db.QueryRow(ctx, `
+SELECT id, candidate_id, slot, file_name, content_type, size_bytes, data, created_at, created_by_admin_id
+FROM candidate_media
+WHERE candidate_id = $1 AND id = $2
+`, candidateID, mediaID)
+	media, err := scanCandidateMedia(row)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrCandidateMediaNotFound
+		}
+		return nil, err
+	}
+	return media, nil
+}
+
+// DeleteMedia deletes a media asset and clears profile reference if needed
+func (r *PgCandidateRepository) DeleteMedia(ctx context.Context, candidateID int64, mediaID string) error {
+	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var slot CandidateMediaSlot
+	err = tx.QueryRow(ctx, `
+SELECT slot FROM candidate_media WHERE candidate_id = $1 AND id = $2 FOR UPDATE
+`, candidateID, mediaID).Scan(&slot)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return ErrCandidateMediaNotFound
+		}
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM candidate_media WHERE id = $1`, mediaID); err != nil {
+		return err
+	}
+
+	// Clear photo reference if the deleted media was profile
+	if slot == CandidateMediaSlotProfile {
+		if _, err := tx.Exec(ctx, `
+UPDATE candidates SET photo_media_id = NULL, updated_at = NOW()
+WHERE id = $1 AND photo_media_id = $2
+`, candidateID, mediaID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+// ListMediaMeta returns lightweight metadata for a candidate
+func (r *PgCandidateRepository) ListMediaMeta(ctx context.Context, candidateID int64) ([]CandidateMediaMeta, error) {
+	rows, err := r.db.Query(ctx, `
+SELECT id, slot, file_name, content_type, size_bytes, created_at
+FROM candidate_media
+WHERE candidate_id = $1
+ORDER BY created_at DESC
+`, candidateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []CandidateMediaMeta
+	for rows.Next() {
+		var meta CandidateMediaMeta
+		if err := rows.Scan(&meta.ID, &meta.Slot, &meta.Label, &meta.ContentType, &meta.SizeBytes, &meta.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, meta)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return items, nil
 }

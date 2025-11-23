@@ -194,6 +194,12 @@ func main() {
 					r.Put("/{electionID}", electionAdminHandler.Update)
 					r.Post("/{electionID}/open-voting", electionAdminHandler.OpenVoting)
 					r.Post("/{electionID}/close-voting", electionAdminHandler.CloseVoting)
+					r.Route("/{electionID}/branding", func(r chi.Router) {
+						r.Get("/", electionAdminHandler.GetBranding)
+						r.Get("/logo/{slot}", electionAdminHandler.GetBrandingLogo)
+						r.Post("/logo/{slot}", electionAdminHandler.UploadBrandingLogo)
+						r.Delete("/logo/{slot}", electionAdminHandler.DeleteBrandingLogo)
+					})
 
 					// Candidate management
 					r.Route("/{electionID}/candidates", func(r chi.Router) {
@@ -213,6 +219,16 @@ func main() {
 
 					// TPS monitoring per election
 					r.Get("/{electionID}/tps/monitor", tpsAdminHandler.Monitor)
+				})
+
+				// Candidate media management (global by candidate ID)
+				r.Route("/admin/candidates", func(r chi.Router) {
+					r.Post("/{candidateID}/media/profile", candidateAdminHandler.UploadProfileMedia)
+					r.Get("/{candidateID}/media/profile", candidateAdminHandler.GetProfileMedia)
+					r.Delete("/{candidateID}/media/profile", candidateAdminHandler.DeleteProfileMedia)
+					r.Post("/{candidateID}/media", candidateAdminHandler.UploadMedia)
+					r.Get("/{candidateID}/media/{mediaID}", candidateAdminHandler.GetMedia)
+					r.Delete("/{candidateID}/media/{mediaID}", candidateAdminHandler.DeleteMedia)
 				})
 
 				// Monitoring (counts/participation)
