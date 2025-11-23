@@ -138,8 +138,12 @@ ORDER BY t.id
 		if err := rows.Scan(
 			&s.TPSID,
 			&s.TPSName,
+			&s.Code,
 			&s.TotalVotes,
+			&s.TotalCheckins,
+			&s.ApprovedCheckins,
 			&s.PendingCheckins,
+			&s.LastActivityAt,
 		); err != nil {
 			return nil, err
 		}
