@@ -382,9 +382,25 @@ func (h *AdminHandler) GetProfileMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If URL exists, redirect to Supabase public URL
+	// Download from Supabase and stream to client
 	if media.URL != "" {
-		http.Redirect(w, r, media.URL, http.StatusTemporaryRedirect)
+		// Fetch blob from Supabase public URL
+		resp, err := http.Get(media.URL)
+		if err != nil {
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil foto profil.")
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy headers
+		w.Header().Set("Content-Type", media.ContentType)
+		if resp.ContentLength > 0 {
+			w.Header().Set("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
+		}
+		
+		// Stream blob to client
+		w.WriteHeader(http.StatusOK)
+		io.Copy(w, resp.Body)
 		return
 	}
 
