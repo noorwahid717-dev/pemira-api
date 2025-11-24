@@ -122,7 +122,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			ua.role,
+			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -148,7 +148,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 	for rows.Next() {
 		var item VoterWithStatusDTO
 		var semester string
-		var voterType *string
+		var voterType string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
@@ -170,9 +170,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			return nil, 0, fmt.Errorf("scan voter: %w", err)
 		}
 		item.Semester = strings.TrimSpace(semester)
-		if voterType != nil {
-			item.VoterType = *voterType
-		}
+		item.VoterType = voterType // Always set voter_type
 		items = append(items, item)
 	}
 
@@ -197,7 +195,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			ua.role,
+			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -219,7 +217,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 	for rows.Next() {
 		var item VoterWithStatusDTO
 		var semester string
-		var voterType *string
+		var voterType string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
@@ -241,9 +239,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			return fmt.Errorf("scan voter: %w", err)
 		}
 		item.Semester = strings.TrimSpace(semester)
-		if voterType != nil {
-			item.VoterType = *voterType
-		}
+		item.VoterType = voterType // Always set voter_type
 
 		if err := fn(item); err != nil {
 			return err
@@ -319,7 +315,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			ua.role,
+			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -333,7 +329,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 
 	var item VoterWithStatusDTO
 	var semester string
-	var voterType *string
+	var voterType string // Changed from *string to string
 	
 	err := r.db.QueryRow(ctx, query, voterID, electionID).Scan(
 		&item.VoterID,
@@ -358,9 +354,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 	}
 
 	item.Semester = strings.TrimSpace(semester)
-	if voterType != nil {
-		item.VoterType = *voterType
-	}
+	item.VoterType = voterType // Always set voter_type
 
 	return &item, nil
 }
@@ -456,14 +450,24 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 			return fmt.Errorf("invalid voter_type: must be STUDENT, LECTURER, or STAFF")
 		}
 		
+		// Update voters.voter_type (primary source)
+		updateVoterTypeQuery := `
+			UPDATE voters 
+			SET voter_type = $1, updated_at = NOW()
+			WHERE id = $2
+		`
+		if _, err := tx.Exec(ctx, updateVoterTypeQuery, *updates.VoterType, voterID); err != nil {
+			return fmt.Errorf("update voter type in voters: %w", err)
+		}
+		
+		// Update user_accounts.role if account exists (keep in sync)
 		updateRoleQuery := `
 			UPDATE user_accounts 
 			SET role = $1, updated_at = NOW()
 			WHERE voter_id = $2
 		`
-		if _, err := tx.Exec(ctx, updateRoleQuery, *updates.VoterType, voterID); err != nil {
-			return fmt.Errorf("update voter type: %w", err)
-		}
+		// Ignore error if account doesn't exist
+		_, _ = tx.Exec(ctx, updateRoleQuery, *updates.VoterType, voterID)
 	}
 
 	// Update voter_status if is_eligible is provided
