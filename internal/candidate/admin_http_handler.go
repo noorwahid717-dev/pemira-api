@@ -231,9 +231,6 @@ func (h *AdminHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
 		return
 	}
-		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
-		return
-	}
 
 	if err := h.svc.AdminDeleteCandidate(ctx, electionID, candidateID); err != nil {
 		h.handleError(w, err)
@@ -243,24 +240,19 @@ func (h *AdminHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Publish menangani POST /admin/candidates/{candidateID}/publish?election_id=...
+// Publish menangani POST /admin/elections/{electionID}/candidates/{candidateID}/publish
 func (h *AdminHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
+		return
+	}
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
 		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
-		return
-	}
-
-	electionIDParam := r.URL.Query().Get("election_id")
-	if electionIDParam == "" {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
-		return
-	}
-	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
-	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
@@ -273,24 +265,19 @@ func (h *AdminHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, dto)
 }
 
-// Unpublish menangani POST /admin/candidates/{candidateID}/unpublish?election_id=...
+// Unpublish menangani POST /admin/elections/{electionID}/candidates/{candidateID}/unpublish
 func (h *AdminHandler) Unpublish(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	electionID, err := parseInt64Param(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "electionID tidak valid.")
+		return
+	}
 
 	candidateID, err := parseInt64Param(r, "candidateID")
 	if err != nil || candidateID <= 0 {
 		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
-		return
-	}
-
-	electionIDParam := r.URL.Query().Get("election_id")
-	if electionIDParam == "" {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id wajib diisi.")
-		return
-	}
-	electionID, err := strconv.ParseInt(electionIDParam, 10, 64)
-	if err != nil || electionID <= 0 {
-		response.BadRequest(w, "INVALID_REQUEST", "election_id tidak valid.")
 		return
 	}
 
