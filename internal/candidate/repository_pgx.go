@@ -757,7 +757,11 @@ func newSupabaseStorage() (*supabaseStorage, error) {
 		return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
 	}
 	
-	client := storage_go.NewClient(url+"/storage/v1", key, nil)
+	// Add apikey header for Supabase auth
+	headers := map[string]string{
+		"apikey": key,
+	}
+	client := storage_go.NewClient(url+"/storage/v1", key, headers)
 	return &supabaseStorage{client: client, url: url}, nil
 }
 
