@@ -586,34 +586,27 @@ WHERE id = $3
 
 // GetProfileMedia retrieves profile media; 404 if missing
 func (r *PgCandidateRepository) GetProfileMedia(ctx context.Context, candidateID int64) (*CandidateMedia, error) {
-	var mediaID *string
+	var photoURL *string
 	err := r.db.QueryRow(ctx, `
-SELECT photo_media_id FROM candidates WHERE id = $1
-`, candidateID).Scan(&mediaID)
+SELECT photo_url FROM candidates WHERE id = $1
+`, candidateID).Scan(&photoURL)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrCandidateNotFound
 		}
 		return nil, err
 	}
-	if mediaID == nil {
+	if photoURL == nil || *photoURL == "" {
 		return nil, ErrCandidateMediaNotFound
 	}
 
-	row := r.db.QueryRow(ctx, `
-SELECT id, candidate_id, slot, file_name, content_type, size_bytes, data, created_at, created_by_admin_id
-FROM candidate_media
-WHERE id = $1 AND candidate_id = $2
-`, *mediaID, candidateID)
-
-	media, err := scanCandidateMedia(row)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, ErrCandidateMediaNotFound
-		}
-		return nil, err
-	}
-	return media, nil
+	// Return media with URL from Supabase (photo_url field)
+	return &CandidateMedia{
+		CandidateID: candidateID,
+		Slot:        CandidateMediaSlotProfile,
+		URL:         *photoURL,
+		ContentType: "image/jpeg",
+	}, nil
 }
 
 // DeleteProfileMedia removes profile media and clears reference

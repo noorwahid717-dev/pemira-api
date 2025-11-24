@@ -45,7 +45,8 @@ type CandidateMedia struct {
 	FileName      string              `json:"file_name"`
 	ContentType   string              `json:"content_type"`
 	SizeBytes     int64               `json:"size"`
-	Data          []byte              `json:"-"`
+	URL           string              `json:"url"` // Supabase public URL
+	Data          []byte              `json:"-"`   // Deprecated: use URL
 	CreatedAt     time.Time           `json:"created_at"`
 	CreatedByID   *int64              `json:"created_by_admin_id,omitempty"`
 }

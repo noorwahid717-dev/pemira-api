@@ -405,10 +405,12 @@ func (h *AdminHandler) GetProfileMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", media.ContentType)
-	w.Header().Set("Content-Length", strconv.FormatInt(media.SizeBytes, 10))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(media.Data)
+	// Return JSON with URL instead of serving BLOB
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"url":          media.URL,
+		"content_type": media.ContentType,
+		"candidate_id": media.CandidateID,
+	})
 }
 
 // DeleteProfileMedia handles DELETE /admin/candidates/{candidateID}/media/profile
