@@ -21,6 +21,7 @@ type VoterStatusDTO struct {
 	IsEligible      bool       `json:"is_eligible"`
 	HasVoted        bool       `json:"has_voted"`
 	LastVoteAt      *time.Time `json:"last_vote_at,omitempty"`
+	VotingMethod    *string    `json:"voting_method,omitempty"`
 	LastVoteChannel *string    `json:"last_vote_channel,omitempty"`
 	LastTPSID       *int64     `json:"last_tps_id,omitempty"`
 }
@@ -70,4 +71,5 @@ type VoterUpdateDTO struct {
 	Phone        *string `json:"phone,omitempty"`
 	IsEligible   *bool   `json:"is_eligible,omitempty"`
 	VoterType    *string `json:"voter_type,omitempty"`
+	VotingMethod *string `json:"voting_method,omitempty"`
 }

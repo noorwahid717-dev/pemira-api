@@ -1,0 +1,2 @@
+-- +goose Up
+-- Reserved for future schema changes

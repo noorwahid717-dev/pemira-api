@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	hash := "$2y$10$A6f.x0pip2mUFBw4qEumbOzfnJ2Yp/IjuTGZpewZeUzxRskHVhSke"
+	hash := "$2a$10$VuGd0ekbW2lxZejZSZjKE.C548Fi9zIjx3XgfBKdKjZK53SW/C6OO"
 	password := "password123"
 	
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))

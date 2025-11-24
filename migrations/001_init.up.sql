@@ -1,0 +1,3 @@
+-- +goose Up
+-- Initial migration placeholder
+-- Actual schema starts from 002_create_tps_foundation

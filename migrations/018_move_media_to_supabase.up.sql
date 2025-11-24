@@ -1,0 +1,2 @@
+-- +goose Up
+-- Reserved: Previously used for BYTEA to Supabase migration, now obsolete

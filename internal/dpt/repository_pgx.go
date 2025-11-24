@@ -127,6 +127,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			vs.has_voted,
 			vs.voted_at,
 			vs.voting_method,
+			v.voting_method,
 			vs.tps_id
 		FROM voters v
 		INNER JOIN voter_status vs ON vs.voter_id = v.id
@@ -149,6 +150,8 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 		var item VoterWithStatusDTO
 		var semester string
 		var voterType string
+		var statusMethod *string
+		var voterMethod *string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
@@ -163,12 +166,15 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			&item.Status.IsEligible,
 			&item.Status.HasVoted,
 			&item.Status.LastVoteAt,
-			&item.Status.LastVoteChannel,
+			&statusMethod,
+			&voterMethod,
 			&item.Status.LastTPSID,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan voter: %w", err)
 		}
+		item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
+		item.Status.LastVoteChannel = item.Status.VotingMethod
 		item.Semester = strings.TrimSpace(semester)
 		item.VoterType = voterType // Always set voter_type
 		items = append(items, item)
@@ -200,6 +206,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			vs.has_voted,
 			vs.voted_at,
 			vs.voting_method,
+			v.voting_method,
 			vs.tps_id
 		FROM voters v
 		INNER JOIN voter_status vs ON vs.voter_id = v.id
@@ -218,6 +225,8 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 		var item VoterWithStatusDTO
 		var semester string
 		var voterType string
+		var statusMethod *string
+		var voterMethod *string
 		err := rows.Scan(
 			&item.VoterID,
 			&item.NIM,
@@ -232,12 +241,15 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			&item.Status.IsEligible,
 			&item.Status.HasVoted,
 			&item.Status.LastVoteAt,
-			&item.Status.LastVoteChannel,
+			&statusMethod,
+			&voterMethod,
 			&item.Status.LastTPSID,
 		)
 		if err != nil {
 			return fmt.Errorf("scan voter: %w", err)
 		}
+		item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
+		item.Status.LastVoteChannel = item.Status.VotingMethod
 		item.Semester = strings.TrimSpace(semester)
 		item.VoterType = voterType // Always set voter_type
 
@@ -320,6 +332,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 			vs.has_voted,
 			vs.voted_at,
 			vs.voting_method,
+			v.voting_method,
 			vs.tps_id
 		FROM voters v
 		INNER JOIN voter_status vs ON vs.voter_id = v.id
@@ -330,7 +343,9 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 	var item VoterWithStatusDTO
 	var semester string
 	var voterType string // Changed from *string to string
-	
+	var statusMethod *string
+	var voterMethod *string
+
 	err := r.db.QueryRow(ctx, query, voterID, electionID).Scan(
 		&item.VoterID,
 		&item.NIM,
@@ -345,14 +360,17 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 		&item.Status.IsEligible,
 		&item.Status.HasVoted,
 		&item.Status.LastVoteAt,
-		&item.Status.LastVoteChannel,
+		&statusMethod,
+		&voterMethod,
 		&item.Status.LastTPSID,
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("get voter: %w", err)
 	}
 
+	item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
+	item.Status.LastVoteChannel = item.Status.VotingMethod
 	item.Semester = strings.TrimSpace(semester)
 	item.VoterType = voterType // Always set voter_type
 
@@ -382,8 +400,8 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 	if err := tx.QueryRow(ctx, checkVotedQuery, voterID, electionID).Scan(&hasVoted); err != nil {
 		return fmt.Errorf("check voter status: %w", err)
 	}
-	
-	// If voter has voted, only allow voter_type update
+
+	// If voter has voted, only allow voter_type and voting_method updates
 	if hasVoted {
 		// Check if trying to update fields other than voter_type
 		if updates.Name != nil || updates.FacultyName != nil || updates.StudyProgram != nil ||
@@ -428,6 +446,15 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 		voterArgs = append(voterArgs, *updates.Phone)
 		argIdx++
 	}
+	if updates.VotingMethod != nil {
+		method := normalizeVotingMethod(*updates.VotingMethod)
+		if method == "" {
+			return fmt.Errorf("invalid voting_method: must be ONLINE or TPS")
+		}
+		voterUpdates = append(voterUpdates, fmt.Sprintf("voting_method = $%d", argIdx))
+		voterArgs = append(voterArgs, method)
+		argIdx++
+	}
 
 	if len(voterUpdates) > 0 {
 		voterUpdates = append(voterUpdates, "updated_at = NOW()")
@@ -449,7 +476,7 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 		if !validTypes[*updates.VoterType] {
 			return fmt.Errorf("invalid voter_type: must be STUDENT, LECTURER, or STAFF")
 		}
-		
+
 		// Update voters.voter_type (primary source)
 		updateVoterTypeQuery := `
 			UPDATE voters 
@@ -459,7 +486,7 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 		if _, err := tx.Exec(ctx, updateVoterTypeQuery, *updates.VoterType, voterID); err != nil {
 			return fmt.Errorf("update voter type in voters: %w", err)
 		}
-		
+
 		// Update user_accounts.role if account exists (keep in sync)
 		updateRoleQuery := `
 			UPDATE user_accounts 
@@ -479,6 +506,22 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 		`
 		if _, err := tx.Exec(ctx, updateStatusQuery, *updates.IsEligible, voterID, electionID); err != nil {
 			return fmt.Errorf("update voter status: %w", err)
+		}
+	}
+
+	// Update voter_status voting_method if provided
+	if updates.VotingMethod != nil {
+		method := normalizeVotingMethod(*updates.VotingMethod)
+		if method == "" {
+			return fmt.Errorf("invalid voting_method: must be ONLINE or TPS")
+		}
+		updateStatusMethodQuery := `
+			UPDATE voter_status 
+			SET voting_method = $1, updated_at = NOW()
+			WHERE voter_id = $2 AND election_id = $3
+		`
+		if _, err := tx.Exec(ctx, updateStatusMethodQuery, method, voterID, electionID); err != nil {
+			return fmt.Errorf("update voter status method: %w", err)
 		}
 	}
 
@@ -502,7 +545,7 @@ func (r *pgxRepository) DeleteVoter(ctx context.Context, electionID int64, voter
 	if err := tx.QueryRow(ctx, checkQuery, voterID, electionID).Scan(&hasVoted); err != nil {
 		return fmt.Errorf("voter not found in this election")
 	}
-	
+
 	if hasVoted {
 		return fmt.Errorf("cannot delete voter who has already voted")
 	}
@@ -518,4 +561,25 @@ func (r *pgxRepository) DeleteVoter(ctx context.Context, electionID int64, voter
 	}
 
 	return nil
+}
+
+func resolveVotingMethod(statusMethod, voterMethod *string) *string {
+	if statusMethod != nil && *statusMethod != "" {
+		return statusMethod
+	}
+	if voterMethod != nil && *voterMethod != "" {
+		return voterMethod
+	}
+	return nil
+}
+
+func normalizeVotingMethod(method string) string {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "ONLINE":
+		return "ONLINE"
+	case "TPS":
+		return "TPS"
+	default:
+		return ""
+	}
 }

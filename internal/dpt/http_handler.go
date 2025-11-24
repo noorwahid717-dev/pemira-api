@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -330,9 +331,18 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if updates.VotingMethod != nil {
+		method := strings.ToUpper(strings.TrimSpace(*updates.VotingMethod))
+		if method != "ONLINE" && method != "TPS" {
+			response.UnprocessableEntity(w, "INVALID_VOTING_METHOD", "voting_method harus ONLINE atau TPS.")
+			return
+		}
+		updates.VotingMethod = &method
+	}
+
 	if err := h.svc.UpdateVoter(ctx, electionID, voterID, updates); err != nil {
 		slog.Error("failed to update voter", "error", err, "voter_id", voterID)
-		
+
 		errMsg := err.Error()
 		if errMsg == "voter not found in this election" {
 			response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
@@ -342,7 +352,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			response.Forbidden(w, "VOTER_HAS_VOTED", "Tidak dapat mengubah data pemilih yang sudah memilih.")
 			return
 		}
-		
+
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengupdate pemilih.")
 		return
 	}
@@ -376,7 +386,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.svc.DeleteVoter(ctx, electionID, voterID); err != nil {
 		slog.Error("failed to delete voter", "error", err, "voter_id", voterID)
-		
+
 		errMsg := err.Error()
 		if errMsg == "voter not found in this election" {
 			response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
@@ -386,7 +396,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			response.Forbidden(w, "VOTER_HAS_VOTED", "Tidak dapat menghapus pemilih yang sudah memilih.")
 			return
 		}
-		
+
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal menghapus pemilih.")
 		return
 	}

@@ -1,0 +1,2 @@
+-- +goose Down
+-- Initial migration placeholder
