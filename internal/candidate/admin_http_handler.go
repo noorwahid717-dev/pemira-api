@@ -382,12 +382,14 @@ func (h *AdminHandler) GetProfileMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return JSON with URL instead of serving BLOB
-	response.JSON(w, http.StatusOK, map[string]interface{}{
-		"url":          media.URL,
-		"content_type": media.ContentType,
-		"candidate_id": media.CandidateID,
-	})
+	// If URL exists, redirect to Supabase public URL
+	if media.URL != "" {
+		http.Redirect(w, r, media.URL, http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Fallback: return 404 if no URL
+	response.NotFound(w, "MEDIA_NOT_FOUND", "Foto profil tidak ditemukan.")
 }
 
 // DeleteProfileMedia handles DELETE /admin/candidates/{candidateID}/media/profile

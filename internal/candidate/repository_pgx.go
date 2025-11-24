@@ -751,14 +751,14 @@ ORDER BY created_at DESC
 
 // Helper functions for Supabase
 func newSupabaseStorage() (*supabaseStorage, error) {
-url := os.Getenv("SUPABASE_URL")
-key := os.Getenv("SUPABASE_SECRET_KEY")
-if url == "" || key == "" {
-return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
-}
-
-client := storage_go.NewClient(url+"/storage/v1", key, nil)
-return &supabaseStorage{client: client, url: url}, nil
+	url := os.Getenv("SUPABASE_URL")
+	key := os.Getenv("SUPABASE_SECRET_KEY")
+	if url == "" || key == "" {
+		return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
+	}
+	
+	client := storage_go.NewClient(url+"/storage/v1", key, nil)
+	return &supabaseStorage{client: client, url: url}, nil
 }
 
 type supabaseStorage struct {
