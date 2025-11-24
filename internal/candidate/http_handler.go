@@ -2,6 +2,7 @@ package candidate
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -73,6 +74,48 @@ func (h *Handler) DetailPublic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, http.StatusOK, dto)
+}
+
+// GetPublicProfileMedia handles GET /elections/{electionID}/candidates/{candidateID}/media/profile
+func (h *Handler) GetPublicProfileMedia(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	candidateID, err := parseIDParam(r, "candidateID")
+	if err != nil || candidateID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "candidateID tidak valid.")
+		return
+	}
+
+	media, err := h.svc.GetProfileMedia(ctx, candidateID)
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	// Download from Supabase and stream to client
+	if media.URL != "" {
+		// Fetch blob from Supabase public URL
+		resp, err := http.Get(media.URL)
+		if err != nil {
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil foto profil.")
+			return
+		}
+		defer resp.Body.Close()
+
+		// Copy headers
+		w.Header().Set("Content-Type", media.ContentType)
+		if resp.ContentLength > 0 {
+			w.Header().Set("Content-Length", strconv.FormatInt(resp.ContentLength, 10))
+		}
+		
+		// Stream blob to client
+		w.WriteHeader(http.StatusOK)
+		io.Copy(w, resp.Body)
+		return
+	}
+
+	// Fallback: return 404 if no URL
+	response.NotFound(w, "MEDIA_NOT_FOUND", "Foto profil tidak ditemukan.")
 }
 
 // parseIDParam parses URL parameter as int64

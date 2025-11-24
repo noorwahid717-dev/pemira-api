@@ -160,6 +160,7 @@ func main() {
 		r.Get("/elections/current", electionHandler.GetCurrent)
 		r.Get("/elections/{electionID}/candidates", candidateHandler.ListPublic)
 		r.Get("/elections/{electionID}/candidates/{candidateID}", candidateHandler.DetailPublic)
+		r.Get("/elections/{electionID}/candidates/{candidateID}/media/profile", candidateHandler.GetPublicProfileMedia)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
