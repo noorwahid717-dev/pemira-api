@@ -38,6 +38,11 @@ type tpsVoteRequest struct {
 	TPSID       int64 `json:"tps_id"`
 }
 
+type castBallotQRRequest struct {
+	ElectionID      *int64 `json:"election_id,omitempty"`
+	BallotQRPayload string `json:"ballot_qr_payload"`
+}
+
 type setMethodRequest struct {
 	ElectionID int64  `json:"election_id"`
 	Method     string `json:"method"`           // ONLINE or TPS
@@ -60,6 +65,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/voting/method", h.SetVoterMethod)
 	r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", h.ScanTPSCandidate)
 	r.Post("/tps/ballots/parse-qr", h.ParseBallotQR)
+	r.Post("/tps/ballots/cast-from-qr", h.CastBallotFromQR)
 
 	// Voter TPS QR (student)
 	r.Get("/voters/{voterID}/tps/qr", h.GetVoterTPSQR)
@@ -282,17 +288,72 @@ func (h *Handler) ScanTPSCandidate(w http.ResponseWriter, r *http.Request) {
 
 // POST /tps/ballots/parse-qr (helper)
 func (h *Handler) ParseBallotQR(w http.ResponseWriter, r *http.Request) {
-	var reqBody scanCandidateRequest
+	ctx := r.Context()
+
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	var reqBody castBallotQRRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
 		return
 	}
-	qr, err := parseBallotQR(reqBody.BallotQRPayload)
-	if err != nil {
-		response.BadRequest(w, "INVALID_BALLOT_QR", "Kode QR surat suara tidak dikenali.")
+
+	if strings.TrimSpace(reqBody.BallotQRPayload) == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "ballot_qr_payload wajib diisi.")
 		return
 	}
-	response.JSON(w, http.StatusOK, qr)
+
+	result, err := h.service.ParseBallotQRForVoter(ctx, authUser, ParseBallotQRRequest{
+		BallotQRPayload: reqBody.BallotQRPayload,
+	})
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// POST /tps/ballots/cast-from-qr (final commit)
+func (h *Handler) CastBallotFromQR(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, ok := auth.FromContext(ctx)
+	if !ok {
+		response.Unauthorized(w, "UNAUTHORIZED", "Token tidak valid.")
+		return
+	}
+
+	var reqBody castBallotQRRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+	if strings.TrimSpace(reqBody.BallotQRPayload) == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "ballot_qr_payload wajib diisi.")
+		return
+	}
+
+	result, err := h.service.CastVoteFromBallotQR(ctx, authUser, CastFromBallotQRRequest{
+		ElectionID:      reqBody.ElectionID,
+		BallotQRPayload: reqBody.BallotQRPayload,
+	})
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"data":    result,
+	})
 }
 
 // GET /voters/{voterID}/tps/qr
@@ -399,10 +460,19 @@ func (h *Handler) handleError(w http.ResponseWriter, err error) {
 		response.BadRequest(w, "INVALID_BALLOT_QR", "Kode QR surat suara tidak dikenali.")
 
 	case errors.Is(err, ErrElectionMismatch):
-		response.BadRequest(w, "ELECTION_MISMATCH", "Kode QR tidak sesuai dengan pemilu di TPS ini.")
+		response.BadRequest(w, "ELECTION_MISMATCH", "Kode QR tidak sesuai dengan pemilu yang sedang Anda ikuti.")
+
+	case errors.Is(err, ErrNotTPSVoter):
+		response.BadRequest(w, "NOT_TPS_VOTER", "Mode pemilihan Anda bukan TPS.")
+
+	case errors.Is(err, ErrNoActiveCheckin):
+		response.BadRequest(w, "NO_ACTIVE_CHECKIN", "Anda belum tercatat melakukan check-in di TPS.")
 
 	case errors.Is(err, ErrModeNotAllowed):
 		response.UnprocessableEntity(w, "MODE_NOT_AVAILABLE", "Mode voting tidak tersedia.")
+
+	case errors.Is(err, ErrDuplicateVoteAttempt):
+		response.Conflict(w, "DUPLICATE_VOTE_ATTEMPT", "Permintaan ini tidak dapat diproses karena suara Anda sudah tercatat.")
 
 	default:
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")

@@ -185,6 +185,8 @@ func main() {
 				r.Use(httpMiddleware.AuthStudentOnly(jwtManager))
 				r.Post("/voting/online/cast", votingHandler.CastOnlineVote)
 				r.Post("/voting/tps/cast", votingHandler.CastTPSVote)
+				r.Post("/voting/tps/ballots/parse-qr", votingHandler.ParseBallotQR)
+				r.Post("/voting/tps/ballots/cast-from-qr", votingHandler.CastBallotFromQR)
 				r.Get("/voting/tps/status", votingHandler.GetTPSVotingStatus)
 				r.Get("/voting/receipt", votingHandler.GetVotingReceipt)
 			})
@@ -274,7 +276,6 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(httpMiddleware.AuthTPSOperatorOnly(jwtManager))
 				r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", votingHandler.ScanTPSCandidate)
-				r.Post("/tps/ballots/parse-qr", votingHandler.ParseBallotQR)
 
 				// TPS panel for operator
 				r.Get("/tps/{tpsID}/summary", tpsHandler.PanelGetSummary)

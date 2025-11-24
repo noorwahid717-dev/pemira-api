@@ -53,6 +53,7 @@ type VoteRepository interface {
 	// Candidate QR
 	FindCandidateQRByToken(ctx context.Context, tx pgx.Tx, token string) (*CandidateQR, error)
 	FindActiveCandidateQR(ctx context.Context, tx pgx.Tx, electionID, candidateID int64) (*CandidateQR, error)
+	FindActiveCandidateQRWithVersion(ctx context.Context, tx pgx.Tx, electionID, candidateID int64, version int) (*CandidateQR, error)
 
 	// Ballot scan logging
 	InsertBallotScan(ctx context.Context, tx pgx.Tx, scan *BallotScan) error

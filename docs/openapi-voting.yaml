@@ -162,6 +162,165 @@ paths:
         '409':
           $ref: '#/components/responses/AlreadyVoted'
 
+  /voting/tps/ballots/parse-qr:
+    post:
+      tags:
+        - Voting
+      summary: Parse QR paslon (offline TPS device)
+      description: |
+        Decode dan validasi QR surat suara untuk mode TPS offline.
+        Endpoint ini tidak melakukan perubahan status apa pun di database.
+      operationId: parseBallotQR
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BallotQRParseRequest'
+      responses:
+        '200':
+          description: Parsed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/BallotQRParseResult'
+        '400':
+          description: Invalid QR or not in TPS mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_qr:
+                  summary: QR tidak valid
+                  value:
+                    success: false
+                    error:
+                      code: "INVALID_BALLOT_QR"
+                      message: "Kode QR surat suara tidak dikenali."
+                      details: null
+                election_mismatch:
+                  summary: Pemilu tidak cocok
+                  value:
+                    success: false
+                    error:
+                      code: "ELECTION_MISMATCH"
+                      message: "Kode QR tidak sesuai dengan pemilu yang sedang Anda ikuti."
+                      details: null
+                not_tps:
+                  summary: Mode voter bukan TPS
+                  value:
+                    success: false
+                    error:
+                      code: "NOT_TPS_VOTER"
+                      message: "Mode pemilihan Anda bukan TPS."
+                      details: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /voting/tps/ballots/cast-from-qr:
+    post:
+      tags:
+        - Voting
+      summary: Rekam suara TPS dari QR paslon (device pemilih)
+      description: |
+        Final commit suara dari QR paslon di perangkat pemilih offline/TPS.
+        Memerlukan check-in TPS aktif dan voter mode TPS.
+      operationId: castVoteFromBallotQR
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BallotQRCastRequest'
+      responses:
+        '200':
+          description: Vote recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/BallotQRCastResult'
+        '400':
+          description: Invalid QR or no active TPS check-in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_qr:
+                  summary: QR tidak valid
+                  value:
+                    success: false
+                    error:
+                      code: "INVALID_BALLOT_QR"
+                      message: "Kode QR surat suara tidak valid."
+                      details: null
+                election_mismatch:
+                  summary: Pemilu tidak cocok
+                  value:
+                    success: false
+                    error:
+                      code: "ELECTION_MISMATCH"
+                      message: "Kode QR tidak sesuai dengan pemilu yang sedang Anda ikuti."
+                      details: null
+                not_tps:
+                  summary: Mode voter bukan TPS
+                  value:
+                    success: false
+                    error:
+                      code: "NOT_TPS_VOTER"
+                      message: "Mode pemilihan Anda bukan TPS."
+                      details: null
+                no_active_checkin:
+                  summary: Belum check-in
+                  value:
+                    success: false
+                    error:
+                      code: "NO_ACTIVE_CHECKIN"
+                      message: "Anda belum tercatat melakukan check-in di TPS."
+                      details: null
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Duplicate vote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                already_voted:
+                  summary: Sudah voting
+                  value:
+                    success: false
+                    error:
+                      code: "ALREADY_VOTED"
+                      message: "Anda sudah memberikan suara pada pemilu ini."
+                      details: null
+                duplicate_attempt:
+                  summary: Duplikasi
+                  value:
+                    success: false
+                    error:
+                      code: "DUPLICATE_VOTE_ATTEMPT"
+                      message: "Permintaan ini tidak dapat diproses karena suara Anda sudah tercatat."
+                      details: null
+
   /voting/tps/status:
     get:
       tags:
@@ -389,6 +548,100 @@ components:
           type: string
           enum: [TPS_REQUIRED, TPS_CHECKIN_NOT_APPROVED, TPS_CHECKIN_EXPIRED]
           example: "TPS_REQUIRED"
+
+    BallotQRParseRequest:
+      type: object
+      required:
+        - ballot_qr_payload
+      properties:
+        ballot_qr_payload:
+          type: string
+          example: "PEMIRA-UNIWA|E:3|C:7|V:1"
+
+    BallotQRCastRequest:
+      type: object
+      required:
+        - ballot_qr_payload
+      properties:
+        election_id:
+          type: integer
+          nullable: true
+          description: Optional explicit election context; must match QR payload.
+        ballot_qr_payload:
+          type: string
+          example: "PEMIRA-UNIWA|E:3|C:7|V:1"
+
+    BallotQRParseResult:
+      type: object
+      properties:
+        election_id:
+          type: integer
+          example: 3
+        election_name:
+          type: string
+          example: "PEMIRA UNIWA 2025"
+        candidate_id:
+          type: integer
+          example: 7
+        candidate_number:
+          type: string
+          example: "02"
+        candidate_name:
+          type: string
+          example: "Budi Pratama"
+        candidate_vice_name:
+          type: string
+          nullable: true
+          example: "Rian Darmawan"
+        version:
+          type: integer
+          example: 1
+
+    BallotQRCastResult:
+      type: object
+      properties:
+        election_id:
+          type: integer
+          example: 3
+        voted_at:
+          type: string
+          format: date-time
+          example: "2025-11-21T10:23:45Z"
+        channel:
+          type: string
+          example: "TPS"
+        tps:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 3
+            code:
+              type: string
+              example: "TPS03"
+            name:
+              type: string
+              example: "TPS Aula Utama"
+        status:
+          type: string
+          example: "VOTED"
+        candidate:
+          type: object
+          nullable: true
+          properties:
+            candidate_id:
+              type: integer
+              example: 7
+            candidate_number:
+              type: string
+              example: "02"
+            candidate_name:
+              type: string
+              example: "Budi Pratama"
+            candidate_vice_name:
+              type: string
+              nullable: true
+              example: "Rian Darmawan"
 
     ReceiptNotVoted:
       type: object

@@ -88,6 +88,7 @@ func (r *voteRepository) GetLatestApprovedCheckin(ctx context.Context, tx pgx.Tx
 		WHERE election_id = $1 AND voter_id = $2 AND status = $3
 		ORDER BY approved_at DESC
 		LIMIT 1
+		FOR UPDATE
 	`
 
 	var checkin tps.TPSCheckin
@@ -217,6 +218,32 @@ func (r *voteRepository) FindActiveCandidateQR(ctx context.Context, tx pgx.Tx, e
 			return nil, shared.ErrNotFound
 		}
 		return nil, fmt.Errorf("find active candidate qr: %w", err)
+	}
+	return &qr, nil
+}
+
+func (r *voteRepository) FindActiveCandidateQRWithVersion(ctx context.Context, tx pgx.Tx, electionID, candidateID int64, version int) (*CandidateQR, error) {
+	query := `
+		SELECT id, election_id, candidate_id, version, qr_token, is_active
+		FROM candidate_qr_codes
+		WHERE election_id = $1 AND candidate_id = $2 AND version = $3 AND is_active = TRUE
+		LIMIT 1
+	`
+
+	var qr CandidateQR
+	err := tx.QueryRow(ctx, query, electionID, candidateID, version).Scan(
+		&qr.ID,
+		&qr.ElectionID,
+		&qr.CandidateID,
+		&qr.Version,
+		&qr.QRToken,
+		&qr.IsActive,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, shared.ErrNotFound
+		}
+		return nil, fmt.Errorf("find active candidate qr with version: %w", err)
 	}
 	return &qr, nil
 }
