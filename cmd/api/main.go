@@ -24,7 +24,9 @@ import (
 	httpMiddleware "pemira-api/internal/http/middleware"
 	"pemira-api/internal/http/response"
 	"pemira-api/internal/monitoring"
+	"pemira-api/internal/settings"
 	"pemira-api/internal/tps"
+	"pemira-api/internal/voter"
 	"pemira-api/internal/voting"
 	"pemira-api/internal/ws"
 	"pemira-api/pkg/database"
@@ -67,6 +69,13 @@ func main() {
 	statsRepo := voting.NewVoteStatsRepository()
 	auditSvc := voting.NewAuditService()
 
+	// Voter profile repositories
+	voterProfileRepo := voter.NewPgRepository(pool)
+	voterAuthRepo := voter.NewAuthRepositoryAdapter(pool)
+
+	// Settings repository
+	settingsRepo := settings.NewRepository(pool)
+
 	// Initialize services
 	jwtConfig := auth.JWTConfig{
 		Secret:          cfg.JWTSecret,
@@ -95,6 +104,9 @@ func main() {
 		auditSvc,
 	)
 
+	voterProfileService := voter.NewService(voterProfileRepo, voterAuthRepo)
+	settingsService := settings.NewService(settingsRepo)
+
 	// Initialize handlers
 	authHandler := auth.NewAuthHandler(authService)
 	electionHandler := election.NewHandler(electionService)
@@ -107,6 +119,8 @@ func main() {
 	tpsPanelAuthHandler := tps.NewPanelAuthHandler(authService, tpsRepo)
 	candidateAdminHandler := candidate.NewAdminHandler(candidateService)
 	monitoringHandler := monitoring.NewHandler(monitoringService)
+	voterProfileHandler := voter.NewProfileHandler(voterProfileService)
+	settingsHandler := settings.NewHandler(settingsService)
 
 	logger.Info("services initialized successfully")
 
@@ -176,6 +190,9 @@ func main() {
 			// Auth protected
 			r.Get("/auth/me", authHandler.Me)
 			r.Post("/auth/logout", authHandler.Logout)
+
+			// Voter profile routes (authenticated - voter only)
+			voterProfileHandler.RegisterRoutes(r)
 
 			// Election routes (authenticated)
 			r.Get("/elections/{electionID}/me/status", electionHandler.GetMeStatus)
@@ -286,6 +303,13 @@ func main() {
 				// Global voters endpoint
 				r.Route("/admin/voters", func(r chi.Router) {
 					r.Get("/", dptHandler.ListAll)
+				})
+
+				// App Settings
+				r.Route("/admin/settings", func(r chi.Router) {
+					r.Get("/", settingsHandler.GetSettings)
+					r.Get("/active-election", settingsHandler.GetActiveElection)
+					r.Put("/active-election", settingsHandler.UpdateActiveElection)
 				})
 
 				// Monitoring (counts/participation)
