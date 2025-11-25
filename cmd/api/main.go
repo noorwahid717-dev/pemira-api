@@ -75,7 +75,7 @@ func main() {
 	}
 	jwtManager := auth.NewJWTManager(jwtConfig)
 	authService := auth.NewAuthService(authRepo, jwtManager, jwtConfig)
-	electionService := election.NewService(electionRepo)
+	electionService := election.NewService(electionRepo, electionAdminRepo)
 	electionAdminService := election.NewAdminService(electionAdminRepo)
 	dptService := dpt.NewService(dptRepo)
 	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
@@ -162,6 +162,9 @@ func main() {
 
 		// Public election routes
 		r.Get("/elections/current", electionHandler.GetCurrent)
+		r.Get("/elections", electionHandler.ListPublic)
+		r.Get("/elections/{electionID}/phases", electionHandler.GetPublicPhases)
+		r.Get("/elections/{electionID}/timeline", electionHandler.GetPublicPhases)
 		r.Get("/elections/{electionID}/candidates", candidateHandler.ListPublic)
 		r.Get("/elections/{electionID}/candidates/{candidateID}", candidateHandler.DetailPublic)
 		r.Get("/elections/{electionID}/candidates/{candidateID}/media/profile", candidateHandler.GetPublicProfileMedia)
@@ -219,6 +222,7 @@ func main() {
 						r.Put("/", electionAdminHandler.UpdatePhases)
 					})
 					r.Route("/{electionID}/settings", func(r chi.Router) {
+						r.Get("/", electionAdminHandler.GetAllSettings)
 						r.Get("/mode", electionAdminHandler.GetModeSettings)
 						r.Put("/mode", electionAdminHandler.UpdateModeSettings)
 					})
@@ -276,6 +280,11 @@ func main() {
 					r.Post("/{candidateID}/media", candidateAdminHandler.UploadMedia)
 					r.Get("/{candidateID}/media/{mediaID}", candidateAdminHandler.GetMedia)
 					r.Delete("/{candidateID}/media/{mediaID}", candidateAdminHandler.DeleteMedia)
+				})
+
+				// Global voters endpoint
+				r.Route("/admin/voters", func(r chi.Router) {
+					r.Get("/", dptHandler.ListAll)
 				})
 
 				// Monitoring (counts/participation)

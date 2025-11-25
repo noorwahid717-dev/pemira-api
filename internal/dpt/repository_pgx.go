@@ -92,6 +92,83 @@ func (r *pgxRepository) ImportVotersForElection(ctx context.Context, electionID 
 	return result, nil
 }
 
+func (r *pgxRepository) ListAllVoters(ctx context.Context, filter ListFilter) ([]VoterWithStatusDTO, int64, error) {
+	whereClause, args := buildWhereClauseAllVoters(filter)
+
+	// Count query
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM voters v
+		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
+		%s
+	`, whereClause)
+
+	var total int64
+	err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count voters: %w", err)
+	}
+
+	// List query
+	listQuery := fmt.Sprintf(`
+		SELECT 
+			v.id,
+			v.nim,
+			v.name,
+			COALESCE(v.faculty_name, ''),
+			COALESCE(v.study_program_name, ''),
+			COALESCE(v.class_label, '') AS semester,
+			v.cohort_year,
+			COALESCE(v.email, ''),
+			(ua.id IS NOT NULL) AS has_account,
+			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type
+		FROM voters v
+		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
+		%s
+		ORDER BY v.nim
+		LIMIT $%d OFFSET $%d
+	`, whereClause, len(args)+1, len(args)+2)
+
+	args = append(args, filter.Limit, filter.Offset)
+
+	rows, err := r.db.Query(ctx, listQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query voters: %w", err)
+	}
+	defer rows.Close()
+
+	var items []VoterWithStatusDTO
+	for rows.Next() {
+		var item VoterWithStatusDTO
+		var semester string
+		var voterType string
+		err := rows.Scan(
+			&item.VoterID,
+			&item.NIM,
+			&item.Name,
+			&item.FacultyName,
+			&item.StudyProgramName,
+			&semester,
+			&item.CohortYear,
+			&item.Email,
+			&item.HasAccount,
+			&voterType,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan voter: %w", err)
+		}
+		item.Semester = strings.TrimSpace(semester)
+		item.VoterType = voterType
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("rows error: %w", err)
+	}
+
+	return items, total, nil
+}
+
 func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID int64, filter ListFilter) ([]VoterWithStatusDTO, int64, error) {
 	whereClause, args := buildWhereClause(electionID, filter)
 
@@ -116,13 +193,13 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			v.id,
 			v.nim,
 			v.name,
-			v.faculty_name,
-			v.study_program_name,
+			COALESCE(v.faculty_name, ''),
+			COALESCE(v.study_program_name, ''),
 			COALESCE(v.class_label, '') AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
+			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -195,13 +272,13 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			v.id,
 			v.nim,
 			v.name,
-			v.faculty_name,
-			v.study_program_name,
+			COALESCE(v.faculty_name, ''),
+			COALESCE(v.study_program_name, ''),
 			COALESCE(v.class_label, '') AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
+			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,
@@ -315,19 +392,56 @@ func buildWhereClause(electionID int64, filter ListFilter) (string, []interface{
 	return whereClause, args
 }
 
+func buildWhereClauseAllVoters(filter ListFilter) (string, []interface{}) {
+	var conditions []string
+	var args []interface{}
+	argIdx := 1
+
+	if filter.Faculty != "" {
+		conditions = append(conditions, fmt.Sprintf("v.faculty_name = $%d", argIdx))
+		args = append(args, filter.Faculty)
+		argIdx++
+	}
+
+	if filter.StudyProgram != "" {
+		conditions = append(conditions, fmt.Sprintf("v.study_program_name = $%d", argIdx))
+		args = append(args, filter.StudyProgram)
+		argIdx++
+	}
+
+	if filter.CohortYear != nil {
+		conditions = append(conditions, fmt.Sprintf("v.cohort_year = $%d", argIdx))
+		args = append(args, *filter.CohortYear)
+		argIdx++
+	}
+
+	if filter.Search != "" {
+		conditions = append(conditions, fmt.Sprintf("(v.nim ILIKE $%d OR v.name ILIKE $%d)", argIdx, argIdx))
+		args = append(args, "%"+filter.Search+"%")
+		argIdx++
+	}
+
+	whereClause := ""
+	if len(conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	return whereClause, args
+}
+
 func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, voterID int64) (*VoterWithStatusDTO, error) {
 	query := `
 		SELECT 
 			v.id,
 			v.nim,
 			v.name,
-			v.faculty_name,
-			v.study_program_name,
+			COALESCE(v.faculty_name, ''),
+			COALESCE(v.study_program_name, ''),
 			COALESCE(v.class_label, '') AS semester,
 			v.cohort_year,
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
-			COALESCE(ua.role::TEXT, v.voter_type) AS voter_type,
+			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
 			vs.is_eligible,
 			vs.has_voted,
 			vs.voted_at,

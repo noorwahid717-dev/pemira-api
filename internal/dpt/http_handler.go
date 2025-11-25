@@ -124,6 +124,44 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, result)
 }
 
+// GET /admin/voters (global, all voters)
+func (h *Handler) ListAll(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	q := r.URL.Query()
+	filter := ListFilter{
+		Faculty:      q.Get("faculty"),
+		StudyProgram: q.Get("study_program"),
+		Search:       q.Get("search"),
+	}
+
+	if cyStr := q.Get("cohort_year"); cyStr != "" {
+		if cy, err := strconv.Atoi(cyStr); err == nil {
+			filter.CohortYear = &cy
+		}
+	}
+
+	page := parseIntDefault(q.Get("page"), 1)
+	limit := parseIntDefault(q.Get("limit"), 50)
+
+	items, pag, err := h.svc.ListAll(ctx, filter, page, limit)
+	if err != nil {
+		slog.Error("failed to list all voters", "error", err)
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil daftar pemilih.")
+		return
+	}
+
+	resp := struct {
+		Items      []VoterWithStatusDTO `json:"items"`
+		Pagination Pagination           `json:"pagination"`
+	}{
+		Items:      items,
+		Pagination: pag,
+	}
+
+	response.JSON(w, http.StatusOK, resp)
+}
+
 // GET /admin/elections/{electionID}/voters
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

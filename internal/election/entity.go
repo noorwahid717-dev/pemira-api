@@ -33,13 +33,15 @@ type Election struct {
 }
 
 type CurrentElectionDTO struct {
-	ID            int64          `json:"id"`
-	Year          int            `json:"year"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	Status        ElectionStatus `json:"status"`
-	VotingStartAt *time.Time     `json:"voting_start_at,omitempty"`
-	VotingEndAt   *time.Time     `json:"voting_end_at,omitempty"`
-	OnlineEnabled bool           `json:"online_enabled"`
-	TPSEnabled    bool           `json:"tps_enabled"`
+	ID            int64              `json:"id"`
+	Year          int                `json:"year"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Status        ElectionStatus     `json:"status"`
+	CurrentPhase  string             `json:"current_phase,omitempty"`
+	VotingStartAt *time.Time         `json:"voting_start_at,omitempty"`
+	VotingEndAt   *time.Time         `json:"voting_end_at,omitempty"`
+	OnlineEnabled bool               `json:"online_enabled"`
+	TPSEnabled    bool               `json:"tps_enabled"`
+	Phases        []ElectionPhaseDTO `json:"phases,omitempty"`
 }

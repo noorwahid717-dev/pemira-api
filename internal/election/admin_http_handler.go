@@ -59,19 +59,20 @@ func newBrandingFileID() (string, error) {
 }
 
 type generalInfoResponse struct {
-	ID            int64          `json:"id"`
-	Year          int            `json:"year"`
-	Slug          string         `json:"slug"`
-	Name          string         `json:"name"`
-	Description   string         `json:"description"`
-	AcademicYear  *string        `json:"academic_year,omitempty"`
-	Status        ElectionStatus `json:"status"`
-	CurrentPhase  string         `json:"current_phase,omitempty"`
-	OnlineEnabled bool           `json:"online_enabled"`
-	TPSEnabled    bool           `json:"tps_enabled"`
-	VotingWindow  VotingWindow   `json:"voting_window"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID            int64              `json:"id"`
+	Year          int                `json:"year"`
+	Slug          string             `json:"slug"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	AcademicYear  *string            `json:"academic_year,omitempty"`
+	Status        ElectionStatus     `json:"status"`
+	CurrentPhase  string             `json:"current_phase,omitempty"`
+	OnlineEnabled bool               `json:"online_enabled"`
+	TPSEnabled    bool               `json:"tps_enabled"`
+	VotingWindow  VotingWindow       `json:"voting_window"`
+	Phases        []ElectionPhaseDTO `json:"phases,omitempty"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
 }
 
 func successPayload(data interface{}) map[string]interface{} {
@@ -87,6 +88,11 @@ func buildGeneralInfoResponse(dto *AdminElectionDTO) generalInfoResponse {
 		currentPhase = *dto.CurrentPhase
 	}
 
+	displayStatus := dto.Status
+	if currentPhase != "" {
+		displayStatus = ElectionStatus(currentPhase)
+	}
+
 	return generalInfoResponse{
 		ID:            dto.ID,
 		Year:          dto.Year,
@@ -94,7 +100,7 @@ func buildGeneralInfoResponse(dto *AdminElectionDTO) generalInfoResponse {
 		Name:          dto.Name,
 		Description:   dto.Description,
 		AcademicYear:  dto.AcademicYear,
-		Status:        dto.Status,
+		Status:        displayStatus,
 		CurrentPhase:  currentPhase,
 		OnlineEnabled: dto.OnlineEnabled,
 		TPSEnabled:    dto.TPSEnabled,
@@ -102,6 +108,7 @@ func buildGeneralInfoResponse(dto *AdminElectionDTO) generalInfoResponse {
 			StartAt: dto.VotingStartAt,
 			EndAt:   dto.VotingEndAt,
 		},
+		Phases:    phaseDTOsFromElection(dto),
 		CreatedAt: dto.CreatedAt,
 		UpdatedAt: dto.UpdatedAt,
 	}
@@ -714,4 +721,57 @@ func (h *AdminHandler) DeleteBrandingLogo(w http.ResponseWriter, r *http.Request
 	}
 
 	response.JSON(w, http.StatusOK, branding)
+}
+
+// GET /admin/elections/{electionID}/settings
+func (h *AdminHandler) GetAllSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	electionID, err := parseIDParam(r, "electionID")
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	// Get general info
+	election, err := h.svc.Get(ctx, electionID)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil detail pemilu.")
+		return
+	}
+
+	// Get phases
+	phases, err := h.svc.GetPhases(ctx, electionID)
+	if err != nil {
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil jadwal tahapan.")
+		return
+	}
+
+	// Get mode settings
+	modeSettings, err := h.svc.GetModeSettings(ctx, electionID)
+	if err != nil {
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil pengaturan mode.")
+		return
+	}
+
+	// Get branding
+	branding, err := h.svc.GetBranding(ctx, electionID)
+	if err != nil {
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil branding.")
+		return
+	}
+
+	// Combine all settings
+	settings := map[string]interface{}{
+		"election":      buildGeneralInfoResponse(election),
+		"phases":        phases,
+		"mode_settings": modeSettings,
+		"branding":      branding,
+	}
+
+	response.JSON(w, http.StatusOK, settings)
 }

@@ -68,6 +68,60 @@ LIMIT 1
 	return &e, nil
 }
 
+func (r *PgRepository) ListPublicElections(ctx context.Context) ([]Election, error) {
+	const q = `
+SELECT
+    id,
+    year,
+    name,
+    code,
+    status,
+    voting_start_at,
+    voting_end_at,
+    online_enabled,
+    tps_enabled,
+    created_at,
+    updated_at
+FROM elections
+WHERE status NOT IN ('ARCHIVED')
+ORDER BY year DESC, id DESC
+LIMIT 10
+`
+	rows, err := r.db.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var elections []Election
+	for rows.Next() {
+		var e Election
+		err := rows.Scan(
+			&e.ID,
+			&e.Year,
+			&e.Name,
+			&e.Slug,
+			&e.Status,
+			&e.VotingStartAt,
+			&e.VotingEndAt,
+			&e.OnlineEnabled,
+			&e.TPSEnabled,
+			&e.CreatedAt,
+			&e.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		elections = append(elections, e)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return elections, nil
+}
+
 func (r *PgRepository) GetByID(ctx context.Context, id int64) (*Election, error) {
 	const q = `
 SELECT
