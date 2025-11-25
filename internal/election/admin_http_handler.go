@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-chi/chi/v5"
@@ -55,6 +56,55 @@ func newBrandingFileID() (string, error) {
 	b[8] = (b[8] & 0x3f) | 0x80
 
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
+}
+
+type generalInfoResponse struct {
+	ID            int64          `json:"id"`
+	Year          int            `json:"year"`
+	Slug          string         `json:"slug"`
+	Name          string         `json:"name"`
+	Description   string         `json:"description"`
+	AcademicYear  *string        `json:"academic_year,omitempty"`
+	Status        ElectionStatus `json:"status"`
+	CurrentPhase  string         `json:"current_phase,omitempty"`
+	OnlineEnabled bool           `json:"online_enabled"`
+	TPSEnabled    bool           `json:"tps_enabled"`
+	VotingWindow  VotingWindow   `json:"voting_window"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+}
+
+func successPayload(data interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"success": true,
+		"data":    data,
+	}
+}
+
+func buildGeneralInfoResponse(dto *AdminElectionDTO) generalInfoResponse {
+	currentPhase := ""
+	if dto.CurrentPhase != nil {
+		currentPhase = *dto.CurrentPhase
+	}
+
+	return generalInfoResponse{
+		ID:            dto.ID,
+		Year:          dto.Year,
+		Slug:          dto.Slug,
+		Name:          dto.Name,
+		Description:   dto.Description,
+		AcademicYear:  dto.AcademicYear,
+		Status:        dto.Status,
+		CurrentPhase:  currentPhase,
+		OnlineEnabled: dto.OnlineEnabled,
+		TPSEnabled:    dto.TPSEnabled,
+		VotingWindow: VotingWindow{
+			StartAt: dto.VotingStartAt,
+			EndAt:   dto.VotingEndAt,
+		},
+		CreatedAt: dto.CreatedAt,
+		UpdatedAt: dto.UpdatedAt,
+	}
 }
 
 const maxBrandingLogoSize = int64(2 * 1024 * 1024) // ~2MB
@@ -140,7 +190,7 @@ func (h *AdminHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, dto)
+	response.JSON(w, http.StatusOK, buildGeneralInfoResponse(dto))
 }
 
 func (h *AdminHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +221,52 @@ func (h *AdminHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, dto)
 }
 
+func (h *AdminHandler) PatchGeneralInfo(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	var req AdminElectionGeneralUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	if req.Name == nil && req.Description == nil && req.AcademicYear == nil {
+		response.UnprocessableEntity(w, "INVALID_INPUT", "Minimal satu field diisi.")
+		return
+	}
+
+	dto, err := h.svc.PatchGeneralInfo(ctx, id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrElectionNotFound):
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		case errors.Is(err, ErrElectionArchived):
+			response.BadRequest(w, "ELECTION_ARCHIVED", "Pemilu sudah diarsipkan.")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengubah informasi pemilu.")
+			return
+		}
+	}
+
+	resp := map[string]interface{}{
+		"id":            dto.ID,
+		"name":          dto.Name,
+		"description":   dto.Description,
+		"academic_year": dto.AcademicYear,
+		"status":        dto.Status,
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(resp))
+}
+
 func (h *AdminHandler) OpenVoting(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -186,11 +282,14 @@ func (h *AdminHandler) OpenVoting(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrElectionNotFound):
 			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
 			return
-		case errors.Is(err, ErrElectionAlreadyOpen):
-			response.BadRequest(w, "ELECTION_ALREADY_OPEN", "Pemilu sudah dalam status voting terbuka.")
+		case errors.Is(err, ErrElectionAlreadyOpened):
+			response.BadRequest(w, "ELECTION_ALREADY_OPENED", "Pemilu sudah dalam status voting terbuka.")
 			return
 		case errors.Is(err, ErrInvalidStatusChange):
 			response.BadRequest(w, "INVALID_STATUS_CHANGE", "Status pemilu tidak dapat dibuka untuk voting.")
+			return
+		case errors.Is(err, ErrElectionNotInVotingPhase):
+			response.BadRequest(w, "ELECTION_NOT_IN_VOTING_PHASE", "Pemilu belum memasuki jadwal voting.")
 			return
 		default:
 			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal membuka voting.")
@@ -198,7 +297,21 @@ func (h *AdminHandler) OpenVoting(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	response.JSON(w, http.StatusOK, dto)
+	currentPhase := ""
+	if dto.CurrentPhase != nil {
+		currentPhase = *dto.CurrentPhase
+	}
+	resp := map[string]interface{}{
+		"id":            dto.ID,
+		"status":        dto.Status,
+		"current_phase": currentPhase,
+		"voting_window": VotingWindow{
+			StartAt: dto.VotingStartAt,
+			EndAt:   dto.VotingEndAt,
+		},
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(resp))
 }
 
 func (h *AdminHandler) CloseVoting(w http.ResponseWriter, r *http.Request) {
@@ -219,10 +332,199 @@ func (h *AdminHandler) CloseVoting(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrElectionNotInOpenState):
 			response.BadRequest(w, "ELECTION_NOT_OPEN", "Pemilu tidak dalam status voting terbuka.")
 			return
+		case errors.Is(err, ErrElectionAlreadyClosed):
+			response.BadRequest(w, "ELECTION_ALREADY_CLOSED", "Pemilu sudah ditutup.")
+			return
 		default:
 			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal menutup voting.")
 			return
 		}
+	}
+
+	currentPhase := ""
+	if dto.CurrentPhase != nil {
+		currentPhase = *dto.CurrentPhase
+	}
+	resp := map[string]interface{}{
+		"id":            dto.ID,
+		"status":        dto.Status,
+		"current_phase": currentPhase,
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(resp))
+}
+
+func (h *AdminHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.Archive(ctx, id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrElectionNotFound):
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		case errors.Is(err, ErrElectionArchived):
+			response.BadRequest(w, "ELECTION_ALREADY_ARCHIVED", "Pemilu sudah diarsipkan.")
+			return
+		case errors.Is(err, ErrElectionNotClosable):
+			response.BadRequest(w, "ELECTION_NOT_CLOSABLE", "Pemilu belum bisa diarsipkan.")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengarsipkan pemilu.")
+			return
+		}
+	}
+
+	resp := map[string]interface{}{
+		"id":     dto.ID,
+		"status": dto.Status,
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(resp))
+}
+
+func (h *AdminHandler) GetPhases(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	resp, err := h.svc.GetPhases(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil jadwal tahapan.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, resp)
+}
+
+func (h *AdminHandler) UpdatePhases(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	var req UpdateElectionPhasesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	respData, err := h.svc.UpdatePhases(ctx, id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrElectionNotFound):
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		case errors.Is(err, ErrInvalidPhaseKey):
+			response.UnprocessableEntity(w, "INVALID_PHASE_KEY", "Key tahapan tidak valid atau tidak lengkap.")
+			return
+		case errors.Is(err, ErrPhaseTimeConflict):
+			response.BadRequest(w, "PHASE_TIME_CONFLICT", "Rentang waktu tahapan bertabrakan.")
+			return
+		case errors.Is(err, ErrVotingPhaseLocked):
+			response.BadRequest(w, "VOTING_PHASE_LOCKED", "Jadwal voting tidak dapat diubah saat voting sudah dibuka.")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal memperbarui jadwal tahapan.")
+			return
+		}
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(respData))
+}
+
+func (h *AdminHandler) GetModeSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.GetModeSettings(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil pengaturan mode.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, dto)
+}
+
+func (h *AdminHandler) UpdateModeSettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	var req ModeSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "VALIDATION_ERROR", "Body tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.UpdateModeSettings(ctx, id, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrElectionNotFound):
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		case errors.Is(err, ErrInvalidModeCombination):
+			response.BadRequest(w, "INVALID_MODE_COMBINATION", "online_enabled dan tps_enabled tidak boleh keduanya false.")
+			return
+		case errors.Is(err, ErrElectionAlreadyStarted):
+			response.BadRequest(w, "ELECTION_ALREADY_STARTED", "Mode tidak bisa diubah karena pemilu sudah berjalan.")
+			return
+		default:
+			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal memperbarui pengaturan mode.")
+			return
+		}
+	}
+
+	response.JSON(w, http.StatusOK, successPayload(dto))
+}
+
+func (h *AdminHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	id, err := parseIDParam(r, "electionID")
+	if err != nil || id <= 0 {
+		response.BadRequest(w, "VALIDATION_ERROR", "electionID tidak valid.")
+		return
+	}
+
+	dto, err := h.svc.GetSummary(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Pemilu tidak ditemukan.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil ringkasan pemilu.")
+		return
 	}
 
 	response.JSON(w, http.StatusOK, dto)

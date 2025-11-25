@@ -330,7 +330,7 @@ func (s *TPSVotingService) updateVoterStatusAfterVote(ctx context.Context, tx pg
 func (s *TPSVotingService) updateCheckinToUsed(ctx context.Context, tx pgx.Tx, checkinID int64) error {
 	query := `
 		UPDATE tps_checkins
-		SET status = 'USED', updated_at = NOW()
+		SET status = 'VOTED', voted_at = NOW(), updated_at = NOW()
 		WHERE id = $1
 	`
 
@@ -356,10 +356,10 @@ func (s *TPSVotingService) logVoteAudit(ctx context.Context, tx pgx.Tx, voterID,
 		INSERT INTO audit_logs (actor_voter_id, action, entity_type, entity_id, metadata, created_at)
 		VALUES ($1, $2, $3, $4, $5, NOW())
 	`
-	
+
 	metadata := `{"election_id": ` + fmt.Sprintf("%d", electionID) + `, "tps_id": ` + fmt.Sprintf("%d", tpsID) + `}`
 	_, _ = tx.Exec(ctx, query, voterID, "VOTE_CAST_TPS", "VOTE", voteID, metadata)
-	
+
 	return nil
 }
 

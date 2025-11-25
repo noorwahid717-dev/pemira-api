@@ -80,6 +80,7 @@ func main() {
 	dptService := dpt.NewService(dptRepo)
 	tpsAdminService := tps.NewAdminService(tpsAdminRepo)
 	tpsService := tps.NewService(tpsRepo)
+	tpsPanelService := tps.NewPanelService(tpsRepo)
 	candidateService := candidate.NewService(candidatePgRepo, candidateStatsProvider)
 	candidateHandler := candidate.NewHandler(candidateService)
 	monitoringService := monitoring.NewService(monitoringRepo)
@@ -102,6 +103,8 @@ func main() {
 	dptHandler := dpt.NewHandler(dptService)
 	tpsAdminHandler := tps.NewAdminHandler(tpsAdminService)
 	tpsHandler := tps.NewTPSHandler(tpsService)
+	tpsPanelHandler := tps.NewPanelHandler(tpsPanelService)
+	tpsPanelAuthHandler := tps.NewPanelAuthHandler(authService, tpsRepo)
 	candidateAdminHandler := candidate.NewAdminHandler(candidateService)
 	monitoringHandler := monitoring.NewHandler(monitoringService)
 
@@ -155,6 +158,7 @@ func main() {
 		r.Post("/auth/register/lecturer-staff", authHandler.RegisterLecturerStaff)
 		r.Post("/auth/login", authHandler.Login)
 		r.Post("/auth/refresh", authHandler.RefreshToken)
+		r.Post("/tps-panel/auth/login", tpsPanelAuthHandler.PanelLogin)
 
 		// Public election routes
 		r.Get("/elections/current", electionHandler.GetCurrent)
@@ -202,13 +206,43 @@ func main() {
 					r.Post("/", electionAdminHandler.Create)
 					r.Get("/{electionID}", electionAdminHandler.Get)
 					r.Put("/{electionID}", electionAdminHandler.Update)
+					r.Patch("/{electionID}", electionAdminHandler.PatchGeneralInfo)
 					r.Post("/{electionID}/open-voting", electionAdminHandler.OpenVoting)
 					r.Post("/{electionID}/close-voting", electionAdminHandler.CloseVoting)
+					r.Route("/{electionID}/actions", func(r chi.Router) {
+						r.Post("/open-voting", electionAdminHandler.OpenVoting)
+						r.Post("/close-voting", electionAdminHandler.CloseVoting)
+						r.Post("/archive", electionAdminHandler.Archive)
+					})
+					r.Route("/{electionID}/phases", func(r chi.Router) {
+						r.Get("/", electionAdminHandler.GetPhases)
+						r.Put("/", electionAdminHandler.UpdatePhases)
+					})
+					r.Route("/{electionID}/settings", func(r chi.Router) {
+						r.Get("/mode", electionAdminHandler.GetModeSettings)
+						r.Put("/mode", electionAdminHandler.UpdateModeSettings)
+					})
+					r.Get("/{electionID}/summary", electionAdminHandler.GetSummary)
 					r.Route("/{electionID}/branding", func(r chi.Router) {
 						r.Get("/", electionAdminHandler.GetBranding)
 						r.Get("/logo/{slot}", electionAdminHandler.GetBrandingLogo)
 						r.Post("/logo/{slot}", electionAdminHandler.UploadBrandingLogo)
 						r.Delete("/logo/{slot}", electionAdminHandler.DeleteBrandingLogo)
+					})
+
+					// TPS election-scoped management
+					r.Route("/{electionID}/tps", func(r chi.Router) {
+						r.Get("/", tpsHandler.AdminListTPSElection)
+						r.Post("/", tpsHandler.AdminCreateTPSElection)
+						r.Get("/{tpsID}", tpsHandler.AdminGetTPSElection)
+						r.Put("/{tpsID}", tpsHandler.AdminUpdateTPSElection)
+						r.Delete("/{tpsID}", tpsHandler.AdminDeleteTPSElection)
+						r.Get("/{tpsID}/qr", tpsHandler.AdminGetQRMetadata)
+						r.Post("/{tpsID}/qr/rotate", tpsHandler.AdminRotateQR)
+						r.Get("/{tpsID}/qr/print", tpsHandler.AdminGetQRPrint)
+						r.Get("/{tpsID}/operators", tpsHandler.AdminListOperators)
+						r.Post("/{tpsID}/operators", tpsHandler.AdminCreateOperator)
+						r.Delete("/{tpsID}/operators/{userID}", tpsHandler.AdminDeleteOperator)
 					})
 
 					// Candidate management
@@ -266,23 +300,24 @@ func main() {
 					r.Delete("/{tpsID}/operators/{userID}", tpsAdminHandler.RemoveOperator)
 				})
 
-				// TPS panel (admin can view)
-				r.Get("/tps/{tpsID}/summary", tpsHandler.PanelGetSummary)
-				r.Get("/tps/{tpsID}/checkins", tpsHandler.PanelListCheckins)
-				r.Post("/tps/{tpsID}/checkins/{checkinID}/approve", tpsHandler.ApproveCheckin)
-				r.Post("/tps/{tpsID}/checkins/{checkinID}/reject", tpsHandler.PanelRejectCheckin)
 			})
 
-			// TPS Operator routes
+			// TPS panel endpoints under admin namespace (admin + TPS operator scoped)
+			r.Route("/admin/elections/{electionID}/tps/{tpsID}", func(r chi.Router) {
+				r.Use(httpMiddleware.AuthAdminOrTPSOperator(jwtManager))
+				r.Get("/dashboard", tpsPanelHandler.Dashboard)
+				r.Get("/status", tpsPanelHandler.Status)
+				r.Get("/checkins", tpsPanelHandler.ListCheckins)
+				r.Get("/checkins/{checkinId}", tpsPanelHandler.GetCheckin)
+				r.Post("/checkin/scan", tpsPanelHandler.ScanCheckin)
+				r.Post("/checkin/manual", tpsPanelHandler.ManualCheckin)
+				r.Get("/stats/timeline", tpsPanelHandler.Timeline)
+			})
+
 			r.Group(func(r chi.Router) {
 				r.Use(httpMiddleware.AuthTPSOperatorOnly(jwtManager))
 				r.Post("/tps/{tpsID}/checkins/{checkinID}/scan-candidate", votingHandler.ScanTPSCandidate)
-
-				// TPS panel for operator
-				r.Get("/tps/{tpsID}/summary", tpsHandler.PanelGetSummary)
-				r.Get("/tps/{tpsID}/checkins", tpsHandler.PanelListCheckins)
-				r.Post("/tps/{tpsID}/checkins/{checkinID}/approve", tpsHandler.ApproveCheckin)
-				r.Post("/tps/{tpsID}/checkins/{checkinID}/reject", tpsHandler.PanelRejectCheckin)
+				r.Post("/tps/{tpsID}/checkins", tpsPanelHandler.CreateCheckinSimple)
 			})
 		})
 	})

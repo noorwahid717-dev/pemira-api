@@ -62,23 +62,23 @@ type TPSListItem struct {
 }
 
 type TPSDetailResponse struct {
-	ID               int64              `json:"id"`
-	ElectionID       int64              `json:"election_id"`
-	Code             string             `json:"code"`
-	Name             string             `json:"name"`
-	Location         string             `json:"location"`
-	Status           string             `json:"status"`
-	VotingDate       string             `json:"voting_date"`
-	OpenTime         string             `json:"open_time"`
-	CloseTime        string             `json:"close_time"`
-	CapacityEstimate int                `json:"capacity_estimate"`
-	PICName          *string            `json:"pic_name,omitempty"`
-	PICPhone         *string            `json:"pic_phone,omitempty"`
-	Notes            *string            `json:"notes,omitempty"`
-	AreaFaculty      *FacultyInfo       `json:"area_faculty"`
-	QR               *QRInfo            `json:"qr"`
-	Stats            TPSStats           `json:"stats"`
-	Panitia          []PanitiaInfo      `json:"panitia"`
+	ID               int64         `json:"id"`
+	ElectionID       int64         `json:"election_id"`
+	Code             string        `json:"code"`
+	Name             string        `json:"name"`
+	Location         string        `json:"location"`
+	Status           string        `json:"status"`
+	VotingDate       string        `json:"voting_date"`
+	OpenTime         string        `json:"open_time"`
+	CloseTime        string        `json:"close_time"`
+	CapacityEstimate int           `json:"capacity_estimate"`
+	PICName          *string       `json:"pic_name,omitempty"`
+	PICPhone         *string       `json:"pic_phone,omitempty"`
+	Notes            *string       `json:"notes,omitempty"`
+	AreaFaculty      *FacultyInfo  `json:"area_faculty"`
+	QR               *QRInfo       `json:"qr"`
+	Stats            TPSStats      `json:"stats"`
+	Panitia          []PanitiaInfo `json:"panitia"`
 }
 
 type FacultyInfo struct {
@@ -100,8 +100,8 @@ type PanitiaInfo struct {
 }
 
 type RegenerateQRResponse struct {
-	TPSID int64       `json:"tps_id"`
-	QR    QRPayload   `json:"qr"`
+	TPSID int64     `json:"tps_id"`
+	QR    QRPayload `json:"qr"`
 }
 
 type QRPayload struct {
@@ -116,11 +116,11 @@ type ScanQRRequest struct {
 }
 
 type ScanQRResponse struct {
-	CheckinID int64      `json:"checkin_id"`
-	TPS       TPSInfo    `json:"tps"`
-	Status    string     `json:"status"`
-	Message   string     `json:"message"`
-	ScanAt    time.Time  `json:"scan_at,omitempty"`
+	CheckinID int64     `json:"checkin_id"`
+	TPS       TPSInfo   `json:"tps"`
+	Status    string    `json:"status"`
+	Message   string    `json:"message"`
+	ScanAt    time.Time `json:"scan_at,omitempty"`
 }
 
 type TPSInfo struct {
@@ -144,11 +144,11 @@ type CheckinQueueResponse struct {
 }
 
 type CheckinQueueItem struct {
-	ID       int64      `json:"id"`
-	Voter    VoterInfo  `json:"voter"`
-	Status   string     `json:"status"`
-	ScanAt   time.Time  `json:"scan_at"`
-	HasVoted bool       `json:"has_voted"`
+	ID       int64     `json:"id"`
+	Voter    VoterInfo `json:"voter"`
+	Status   string    `json:"status"`
+	ScanAt   time.Time `json:"scan_at"`
+	HasVoted bool      `json:"has_voted"`
 }
 
 type VoterInfo struct {
@@ -196,4 +196,69 @@ type PaginationInfo struct {
 	Limit      int `json:"limit"`
 	TotalItems int `json:"total_items"`
 	TotalPages int `json:"total_pages"`
+}
+
+// Panel projections
+type PanelDashboardStatsRow struct {
+	TotalRegistered int
+	TotalCheckedIn  int
+	TotalVoted      int
+	LastActivity    *time.Time
+}
+
+type PanelCheckinRow struct {
+	ID         int64
+	TPSID      int64
+	ElectionID int64
+	VoterID    int64
+	VoterName  string
+	VoterNIM   string
+	Faculty    string
+	Program    string
+	Status     string
+	ScanAt     time.Time
+	VotedAt    *time.Time
+}
+
+type PanelTimelineRow struct {
+	BucketStart time.Time
+	CheckedIn   int
+	Voted       int
+}
+
+type OperatorInfo struct {
+	ID       int64
+	Username string
+	Name     string
+	TPSID    *int64
+	Email    string
+}
+
+type PanelRegistrationCode struct {
+	ElectionID int64
+	VoterID    int64
+	TPSID      *int64
+	Raw        string
+}
+
+type PanelTPSListItem struct {
+	TPS       TPSInfo
+	Status    string
+	Stats     PanelDashboardStatsRow
+	Location  string
+	OpenTime  string
+	CloseTime string
+	Capacity  int
+}
+
+type VotingWindow struct {
+	StartAt *time.Time `json:"start_at,omitempty"`
+	EndAt   *time.Time `json:"end_at,omitempty"`
+}
+
+type OperatorCreate struct {
+	Username string
+	Password string
+	Name     string
+	Email    string
 }

@@ -10,6 +10,7 @@ const (
 	VoterIDKey    contextKey = "voter_id"
 	RequestIDKey  contextKey = "request_id"
 	ElectionIDKey contextKey = "election_id"
+	TPSIDKey      contextKey = "tps_id"
 )
 
 // GetVoterID extracts voter ID from context
@@ -44,4 +45,14 @@ func GetUserRole(ctx context.Context) (string, bool) {
 	}
 	role, ok := v.(string)
 	return role, ok
+}
+
+// GetTPSID extracts TPS ID from context
+func GetTPSID(ctx context.Context) (int64, bool) {
+	v := ctx.Value(TPSIDKey)
+	if v == nil {
+		return 0, false
+	}
+	id, ok := v.(int64)
+	return id, ok
 }

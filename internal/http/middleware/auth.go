@@ -46,6 +46,9 @@ func JWTAuth(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
 			if claims.VoterID != nil {
 				ctx = context.WithValue(ctx, ctxkeys.VoterIDKey, *claims.VoterID)
 			}
+			if claims.TPSID != nil {
+				ctx = context.WithValue(ctx, ctxkeys.TPSIDKey, *claims.TPSID)
+			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -93,6 +96,24 @@ func AuthTPSOperatorOnly(jwtManager *auth.JWTManager) func(http.Handler) http.Ha
 			role, ok := ctxkeys.GetUserRole(r.Context())
 			if !ok || (role != string(constants.RoleTPSOperator) && role != string(constants.RoleAdmin) && role != string(constants.RoleSuperAdmin)) {
 				response.Forbidden(w, "FORBIDDEN", "Akses ditolak. Hanya untuk operator TPS atau admin.")
+				return
+			}
+			next.ServeHTTP(w, r)
+		}))
+	}
+}
+
+// AuthAdminOrTPSOperator allows ADMIN, SUPER_ADMIN, or TPS_OPERATOR.
+func AuthAdminOrTPSOperator(jwtManager *auth.JWTManager) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return JWTAuth(jwtManager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			role, ok := ctxkeys.GetUserRole(r.Context())
+			if !ok {
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak.")
+				return
+			}
+			if role != string(constants.RoleAdmin) && role != string(constants.RoleSuperAdmin) && role != string(constants.RoleTPSOperator) {
+				response.Forbidden(w, "FORBIDDEN", "Akses ditolak.")
 				return
 			}
 			next.ServeHTTP(w, r)

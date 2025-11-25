@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -64,6 +65,21 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Put("/{id}", h.AdminUpdateTPS)
 		r.Put("/{id}/panitia", h.AdminAssignPanitia)
 		r.Post("/{id}/qr/regenerate", h.AdminRegenerateQR)
+	})
+
+	// Election-scoped TPS for admin/operator panel
+	r.Route("/admin/elections/{electionID}/tps", func(r chi.Router) {
+		r.Get("/", h.AdminListTPSElection)
+		r.Post("/", h.AdminCreateTPSElection)
+		r.Get("/{tpsID}", h.AdminGetTPSElection)
+		r.Put("/{tpsID}", h.AdminUpdateTPSElection)
+		r.Delete("/{tpsID}", h.AdminDeleteTPSElection)
+		r.Get("/{tpsID}/qr", h.AdminGetQRMetadata)
+		r.Post("/{tpsID}/qr/rotate", h.AdminRotateQR)
+		r.Get("/{tpsID}/qr/print", h.AdminGetQRPrint)
+		r.Get("/{tpsID}/operators", h.AdminListOperators)
+		r.Post("/{tpsID}/operators", h.AdminCreateOperator)
+		r.Delete("/{tpsID}/operators/{userID}", h.AdminDeleteOperator)
 	})
 
 	// Student Check-in
@@ -218,6 +234,262 @@ func (h *Handler) AdminRegenerateQR(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, http.StatusOK, result)
+}
+
+// ==== Election-scoped admin endpoints ====
+func (h *Handler) AdminListTPSElection(w http.ResponseWriter, r *http.Request) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
+		return
+	}
+	filter := ListFilter{
+		Status:     r.URL.Query().Get("status"),
+		ElectionID: electionID,
+		Page:       parseInt(r.URL.Query().Get("page"), 1),
+		Limit:      parseInt(r.URL.Query().Get("limit"), 20),
+	}
+
+	result, err := h.service.List(r.Context(), filter)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"election_id": electionID,
+		"items":       result.Items,
+		"pagination":  result.Pagination,
+	})
+}
+
+func (h *Handler) AdminGetTPSElection(w http.ResponseWriter, r *http.Request) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
+		return
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
+		return
+	}
+
+	result, err := h.service.GetByIDElection(r.Context(), electionID, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, result)
+}
+
+func (h *Handler) AdminCreateTPSElection(w http.ResponseWriter, r *http.Request) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
+		return
+	}
+
+	var req CreateTPSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+	req.ElectionID = electionID
+
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+
+	id, err := h.service.Create(r.Context(), &req)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusCreated, map[string]interface{}{
+		"id":     id,
+		"status": req.Status,
+	})
+}
+
+func (h *Handler) AdminUpdateTPSElection(w http.ResponseWriter, r *http.Request) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
+		return
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
+		return
+	}
+
+	var req UpdateTPSRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		response.Error(w, http.StatusUnprocessableEntity, "VALIDATION_ERROR", "Validation failed", err.Error())
+		return
+	}
+
+	if err := h.service.UpdateWithElection(r.Context(), electionID, tpsID, &req); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"id":     tpsID,
+		"status": req.Status,
+	})
+}
+
+func (h *Handler) AdminDeleteTPSElection(w http.ResponseWriter, r *http.Request) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election ID")
+		return
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid TPS ID")
+		return
+	}
+
+	if err := h.service.Delete(r.Context(), electionID, tpsID); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"id": tpsID,
+	})
+}
+
+func (h *Handler) AdminGetQRMetadata(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	qr, err := h.service.GetQRMetadata(r.Context(), electionID, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusOK, qr)
+}
+
+func (h *Handler) AdminRotateQR(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	qr, err := h.service.RotateQR(r.Context(), electionID, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusOK, qr)
+}
+
+func (h *Handler) AdminGetQRPrint(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	payload, err := h.service.GetQRPrintPayload(r.Context(), electionID, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"qr_payload":    payload,
+		"has_active_qr": true,
+	})
+}
+
+func (h *Handler) AdminListOperators(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	ops, err := h.service.ListOperators(r.Context(), electionID, tpsID)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"items": ops,
+	})
+}
+
+func (h *Handler) AdminCreateOperator(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	var req OperatorCreate
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid request body")
+		return
+	}
+	req.Username = strings.TrimSpace(req.Username)
+	req.Password = strings.TrimSpace(req.Password)
+	if req.Username == "" || req.Password == "" {
+		response.UnprocessableEntity(w, "VALIDATION_ERROR", "username dan password wajib diisi.")
+		return
+	}
+	if req.Name == "" {
+		req.Name = req.Username
+	}
+
+	op, err := h.service.CreateOperator(r.Context(), electionID, tpsID, req)
+	if err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusCreated, op)
+}
+
+func (h *Handler) AdminDeleteOperator(w http.ResponseWriter, r *http.Request) {
+	electionID, tpsID, ok := parseElectionTPS(r)
+	if !ok {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid election_id atau tps_id")
+		return
+	}
+	userID, err := strconv.ParseInt(chi.URLParam(r, "userID"), 10, 64)
+	if err != nil || userID <= 0 {
+		response.BadRequest(w, "INVALID_REQUEST", "Invalid operator user ID")
+		return
+	}
+	if err := h.service.DeleteOperator(r.Context(), electionID, tpsID, userID); err != nil {
+		code, status := GetErrorCode(err)
+		response.Error(w, status, code, err.Error(), nil)
+		return
+	}
+	response.Success(w, http.StatusOK, map[string]interface{}{
+		"user_id": userID,
+	})
 }
 
 // ===== STUDENT ENDPOINTS =====
@@ -425,4 +697,16 @@ func parseInt(s string, defaultVal int) int {
 		return defaultVal
 	}
 	return i
+}
+
+func parseElectionTPS(r *http.Request) (int64, int64, bool) {
+	electionID, err := strconv.ParseInt(chi.URLParam(r, "electionID"), 10, 64)
+	if err != nil || electionID <= 0 {
+		return 0, 0, false
+	}
+	tpsID, err := strconv.ParseInt(chi.URLParam(r, "tpsID"), 10, 64)
+	if err != nil || tpsID <= 0 {
+		return 0, 0, false
+	}
+	return electionID, tpsID, true
 }

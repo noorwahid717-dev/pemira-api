@@ -8,10 +8,13 @@ const (
 	ElectionStatusDraft            ElectionStatus = "DRAFT"
 	ElectionStatusRegistration     ElectionStatus = "REGISTRATION"
 	ElectionStatusRegistrationOpen ElectionStatus = "REGISTRATION_OPEN"
+	ElectionStatusVerification     ElectionStatus = "VERIFICATION"
 	ElectionStatusCampaign         ElectionStatus = "CAMPAIGN"
+	ElectionStatusQuietPeriod      ElectionStatus = "QUIET_PERIOD"
 	ElectionStatusVotingOpen       ElectionStatus = "VOTING_OPEN"
 	ElectionStatusVotingClosed     ElectionStatus = "VOTING_CLOSED"
 	ElectionStatusClosed           ElectionStatus = "CLOSED"
+	ElectionStatusRecap            ElectionStatus = "RECAP"
 	ElectionStatusArchived         ElectionStatus = "ARCHIVED"
 )
 

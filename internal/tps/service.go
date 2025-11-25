@@ -17,20 +17,38 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
+func (s *Service) ensureTPSElection(ctx context.Context, electionID, tpsID int64) (*TPS, error) {
+	if electionID > 0 {
+		return s.repo.GetByIDElection(ctx, electionID, tpsID)
+	}
+	return s.repo.GetByID(ctx, tpsID)
+}
+
 // Admin TPS Management
 func (s *Service) GetByID(ctx context.Context, id int64) (*TPSDetailResponse, error) {
 	tps, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, ErrTPSNotFound
 	}
+	return s.buildDetail(ctx, tps)
+}
 
-	stats, _ := s.repo.GetStats(ctx, id)
+func (s *Service) GetByIDElection(ctx context.Context, electionID, id int64) (*TPSDetailResponse, error) {
+	tps, err := s.repo.GetByIDElection(ctx, electionID, id)
+	if err != nil {
+		return nil, ErrTPSNotFound
+	}
+	return s.buildDetail(ctx, tps)
+}
+
+func (s *Service) buildDetail(ctx context.Context, tps *TPS) (*TPSDetailResponse, error) {
+	stats, _ := s.repo.GetStats(ctx, tps.ID)
 	if stats == nil {
 		stats = &TPSStats{}
 	}
 
-	qr, _ := s.repo.GetActiveQR(ctx, id)
-	panitia, _ := s.repo.GetPanitia(ctx, id)
+	qr, _ := s.repo.GetActiveQR(ctx, tps.ID)
+	panitia, _ := s.repo.GetPanitia(ctx, tps.ID)
 
 	response := &TPSDetailResponse{
 		ID:               tps.ID,
@@ -42,6 +60,9 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*TPSDetailResponse, er
 		OpenTime:         tps.OpenTime,
 		CloseTime:        tps.CloseTime,
 		CapacityEstimate: tps.CapacityEstimate,
+		PICName:          tps.PICName,
+		PICPhone:         tps.PICPhone,
+		Notes:            tps.Notes,
 		AreaFaculty:      &FacultyInfo{ID: tps.AreaFacultyID},
 		Stats:            *stats,
 		Panitia:          []PanitiaInfo{},
@@ -86,15 +107,19 @@ func (s *Service) List(ctx context.Context, filter ListFilter) (*TPSListResponse
 	items := make([]TPSListItem, 0, len(tpsList))
 	for _, t := range tpsList {
 		stats, _ := s.repo.GetStats(ctx, t.ID)
+		activeQR, _ := s.repo.GetActiveQR(ctx, t.ID)
 
 		item := TPSListItem{
-			ID:        t.ID,
-			Code:      t.Code,
-			Name:      t.Name,
-			Location:  t.Location,
-			Status:    t.Status,
-			OpenTime:  t.OpenTime,
-			CloseTime: t.CloseTime,
+			ID:          t.ID,
+			Code:        t.Code,
+			Name:        t.Name,
+			Location:    t.Location,
+			Status:      t.Status,
+			OpenTime:    t.OpenTime,
+			CloseTime:   t.CloseTime,
+			PICName:     t.PICName,
+			PICPhone:    t.PICPhone,
+			HasActiveQR: activeQR != nil,
 		}
 
 		if t.VotingDate != nil {
@@ -179,8 +204,71 @@ func (s *Service) Update(ctx context.Context, id int64, req *UpdateTPSRequest) e
 	tps.OpenTime = req.OpenTime
 	tps.CloseTime = req.CloseTime
 	tps.CapacityEstimate = req.CapacityEstimate
+	tps.PICName = req.PICName
+	tps.PICPhone = req.PICPhone
+	tps.Notes = req.Notes
 
 	return s.repo.Update(ctx, tps)
+}
+
+func (s *Service) UpdateWithElection(ctx context.Context, electionID, id int64, req *UpdateTPSRequest) error {
+	tpsRow, err := s.repo.GetByIDElection(ctx, electionID, id)
+	if err != nil {
+		return ErrTPSNotFound
+	}
+	if err := s.Update(ctx, tpsRow.ID, req); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) Delete(ctx context.Context, electionID, id int64) error {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, id); err != nil {
+		return ErrTPSNotFound
+	}
+	return s.repo.Delete(ctx, electionID, id)
+}
+
+func (s *Service) GetQRMetadata(ctx context.Context, electionID, tpsID int64) (*QRInfo, error) {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return nil, err
+	}
+	return s.repo.GetQRMetadata(ctx, tpsID)
+}
+
+func (s *Service) RotateQR(ctx context.Context, electionID, tpsID int64) (*QRInfo, error) {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return nil, err
+	}
+	return s.repo.RotateQR(ctx, tpsID)
+}
+
+func (s *Service) GetQRPrintPayload(ctx context.Context, electionID, tpsID int64) (string, error) {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return "", err
+	}
+	return s.repo.GetQRPrintPayload(ctx, tpsID)
+}
+
+func (s *Service) ListOperators(ctx context.Context, electionID, tpsID int64) ([]OperatorInfo, error) {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListOperators(ctx, tpsID)
+}
+
+func (s *Service) CreateOperator(ctx context.Context, electionID, tpsID int64, op OperatorCreate) (*OperatorInfo, error) {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return nil, err
+	}
+	return s.repo.CreateOperator(ctx, tpsID, op)
+}
+
+func (s *Service) DeleteOperator(ctx context.Context, electionID, tpsID, userID int64) error {
+	if _, err := s.repo.GetByIDElection(ctx, electionID, tpsID); err != nil {
+		return err
+	}
+	return s.repo.DeleteOperator(ctx, tpsID, userID)
 }
 
 func (s *Service) AssignPanitia(ctx context.Context, tpsID int64, req *AssignPanitiaRequest) error {
