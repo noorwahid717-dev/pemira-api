@@ -6,16 +6,23 @@ import (
 )
 
 type Voter struct {
-	ID             int64       `json:"id"`
-	NIM            string      `json:"nim"`
-	FullName       string      `json:"full_name"`
-	Faculty        string      `json:"faculty"`
-	StudyProgram   string      `json:"study_program"`
-	Batch          int         `json:"batch"`
-	DateOfBirth    time.Time   `json:"date_of_birth"`
-	IsActive       bool        `json:"is_active"`
-	CreatedAt      time.Time   `json:"created_at"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	ID                      int64       `json:"id"`
+	NIM                     string      `json:"nim"`
+	Name                    string      `json:"name"`
+	Email                   *string     `json:"email"`
+	Phone                   *string     `json:"phone"`
+	FacultyCode             *string     `json:"faculty_code"`
+	FacultyName             *string     `json:"faculty_name"`
+	StudyProgramCode        *string     `json:"study_program_code"`
+	StudyProgramName        *string     `json:"study_program_name"`
+	CohortYear              *int        `json:"cohort_year"`
+	ClassLabel              *string     `json:"class_label"`
+	PhotoURL                *string     `json:"photo_url"`
+	Bio                     *string     `json:"bio"`
+	VotingMethodPreference  *string     `json:"voting_method_preference"`
+	AcademicStatus          string      `json:"academic_status"`
+	CreatedAt               time.Time   `json:"created_at"`
+	UpdatedAt               time.Time   `json:"updated_at"`
 }
 
 type VoterElectionStatus struct {

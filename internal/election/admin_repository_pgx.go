@@ -1,11 +1,15 @@
 package election
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
+
+	storage_go "github.com/supabase-community/storage-go"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,6 +28,7 @@ const adminElectionColumns = `
     year,
     name,
     code,
+    COALESCE(slug, '') as slug,
     description,
     academic_year,
     status,
@@ -96,6 +101,7 @@ func scanAdminElection(row rowScanner) (*AdminElectionDTO, error) {
 		&dto.ID,
 		&dto.Year,
 		&dto.Name,
+		&dto.Code,
 		&dto.Slug,
 		&dto.Description,
 		&dto.AcademicYear,
@@ -389,6 +395,21 @@ func (r *PgAdminRepository) UpdateGeneralInfo(ctx context.Context, id int64, req
 	args := []any{}
 	pos := 1
 
+	if req.Year != nil {
+		updates = append(updates, fmt.Sprintf("year = $%d", pos))
+		args = append(args, *req.Year)
+		pos++
+	}
+	if req.Code != nil {
+		updates = append(updates, fmt.Sprintf("code = $%d", pos))
+		args = append(args, *req.Code)
+		pos++
+	}
+	if req.Slug != nil {
+		updates = append(updates, fmt.Sprintf("slug = $%d", pos))
+		args = append(args, *req.Slug)
+		pos++
+	}
 	if req.Name != nil {
 		updates = append(updates, fmt.Sprintf("name = $%d", pos))
 		args = append(args, *req.Name)
@@ -641,6 +662,47 @@ ON CONFLICT (election_id) DO NOTHING
 	return err
 }
 
+// Supabase helpers for branding storage
+type supabaseStorage struct {
+	client *storage_go.Client
+	url    string
+	bucket string
+}
+
+func newBrandingStorage() (*supabaseStorage, error) {
+	url := os.Getenv("SUPABASE_URL")
+	key := os.Getenv("SUPABASE_SECRET_KEY")
+	bucket := os.Getenv("SUPABASE_BRANDING_BUCKET")
+	if bucket == "" {
+		bucket = "branding"
+	}
+	if url == "" || key == "" {
+		return nil, fmt.Errorf("SUPABASE_URL and SUPABASE_SECRET_KEY required")
+	}
+	headers := map[string]string{"apikey": key}
+	client := storage_go.NewClient(url+"/storage/v1", key, headers)
+	return &supabaseStorage{client: client, url: url, bucket: bucket}, nil
+}
+
+func (s *supabaseStorage) Upload(ctx context.Context, path string, data []byte, contentType string) (string, error) {
+	reader := bytes.NewReader(data)
+	if _, err := s.client.UploadFile(s.bucket, path, reader); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/storage/v1/object/public/%s/%s", s.url, s.bucket, path), nil
+}
+
+func getBrandingExtension(contentType string) string {
+	switch strings.ToLower(contentType) {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	default:
+		return ".bin"
+	}
+}
+
 func (r *PgAdminRepository) GetBranding(ctx context.Context, electionID int64) (*BrandingSettings, error) {
 	if err := r.ensureBrandingSettings(ctx, electionID); err != nil {
 		return nil, err
@@ -702,7 +764,7 @@ SELECT
     bf.slot,
     bf.content_type,
     bf.size_bytes,
-    bf.data,
+    bf.storage_path,
     bf.created_at,
     bf.created_by_admin_id
 FROM branding_settings bs
@@ -711,13 +773,14 @@ WHERE bs.election_id = $1
 `, column)
 
 	var file BrandingFile
+	var storagePath string
 	err = r.db.QueryRow(ctx, query, electionID).Scan(
 		&file.ID,
 		&file.ElectionID,
 		&file.Slot,
 		&file.ContentType,
 		&file.SizeBytes,
-		&file.Data,
+		&storagePath,
 		&file.CreatedAt,
 		&file.CreatedByID,
 	)
@@ -726,6 +789,12 @@ WHERE bs.election_id = $1
 			return nil, ErrBrandingFileNotFound
 		}
 		return nil, err
+	}
+
+	if len(storagePath) > 0 && strings.HasPrefix(storagePath, "http") {
+		file.URL = &storagePath
+	} else {
+		file.Data = []byte(storagePath)
 	}
 
 	return &file, nil
@@ -737,6 +806,17 @@ func (r *PgAdminRepository) SaveBrandingFile(
 	slot BrandingSlot,
 	file BrandingFileCreate,
 ) (*BrandingFile, error) {
+	// Try Supabase upload first
+	dataToStore := file.Data
+	var uploadedURL *string
+	if storage, _ := newBrandingStorage(); storage != nil {
+		path := fmt.Sprintf("branding/%d/%s/%s%s", electionID, slot, file.ID, getBrandingExtension(file.ContentType))
+		if url, err := storage.Upload(ctx, path, file.Data, file.ContentType); err == nil {
+			dataToStore = []byte(url)
+			uploadedURL = &url
+		}
+	}
+
 	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, err
@@ -760,10 +840,10 @@ FOR UPDATE
 
 	var createdAt time.Time
 	err = tx.QueryRow(ctx, `
-INSERT INTO branding_files (id, election_id, slot, content_type, size_bytes, data, created_by_admin_id)
+INSERT INTO branding_files (id, election_id, slot, content_type, size_bytes, storage_path, created_by_admin_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING created_at
-`, file.ID, electionID, slot, file.ContentType, file.SizeBytes, file.Data, file.CreatedByID).Scan(&createdAt)
+`, file.ID, electionID, slot, file.ContentType, file.SizeBytes, string(dataToStore), file.CreatedByID).Scan(&createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -812,6 +892,7 @@ WHERE election_id = $3
 		ContentType: file.ContentType,
 		SizeBytes:   file.SizeBytes,
 		Data:        file.Data,
+		URL:         uploadedURL,
 		CreatedAt:   createdAt,
 		CreatedByID: &file.CreatedByID,
 	}, nil

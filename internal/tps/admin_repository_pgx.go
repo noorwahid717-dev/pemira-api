@@ -51,7 +51,7 @@ ORDER BY t.code
 	}
 	defer rows.Close()
 
-	var items []TPSDTO
+	items := make([]TPSDTO, 0)
 	for rows.Next() {
 		var t TPSDTO
 		if err := rows.Scan(

@@ -16,4 +16,22 @@ type Repository interface {
 	GetElectionStatus(ctx context.Context, voterID, electionID int64) (*VoterElectionStatus, error)
 	CreateElectionStatus(ctx context.Context, status *VoterElectionStatus) error
 	UpdateElectionStatus(ctx context.Context, status *VoterElectionStatus) error
+	
+	// Profile methods
+	GetCompleteProfile(ctx context.Context, voterID int64, userID int64) (*CompleteProfileResponse, error)
+	UpdateProfile(ctx context.Context, voterID int64, req *UpdateProfileRequest) error
+	UpdateVotingMethod(ctx context.Context, voterID, electionID int64, method string) error
+	GetParticipationStats(ctx context.Context, voterID int64) (*ParticipationStatsResponse, error)
+	DeletePhoto(ctx context.Context, voterID int64) error
+}
+
+type AuthRepository interface {
+	GetUserByID(ctx context.Context, userID int64) (*User, error)
+	UpdatePassword(ctx context.Context, userID int64, hashedPassword string) error
+}
+
+type User struct {
+	ID           int64  `json:"id"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"-"`
 }

@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+docs/
+
+# Build artifacts
+/bin
+/pemira-api
+/main
+*.exe
+*.log
+api.log
+output.log
+nohup.out
+test_run.log
+
+# Test files
+*_test.go
+test-*.sh
+*.sql
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+/tmp
+*.tmp

@@ -61,9 +61,10 @@ func newBrandingFileID() (string, error) {
 type generalInfoResponse struct {
 	ID            int64              `json:"id"`
 	Year          int                `json:"year"`
+	Code          string             `json:"code"`
 	Slug          string             `json:"slug"`
 	Name          string             `json:"name"`
-	Description   string             `json:"description"`
+	Description   *string            `json:"description,omitempty"`
 	AcademicYear  *string            `json:"academic_year,omitempty"`
 	Status        ElectionStatus     `json:"status"`
 	CurrentPhase  string             `json:"current_phase,omitempty"`
@@ -96,6 +97,7 @@ func buildGeneralInfoResponse(dto *AdminElectionDTO) generalInfoResponse {
 	return generalInfoResponse{
 		ID:            dto.ID,
 		Year:          dto.Year,
+		Code:          dto.Code,
 		Slug:          dto.Slug,
 		Name:          dto.Name,
 		Description:   dto.Description,
@@ -140,6 +142,7 @@ func (h *AdminHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, pag, err := h.svc.List(ctx, filter, page, limit)
 	if err != nil {
+		fmt.Printf("ERROR List elections: %v\n", err)
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil daftar pemilu.")
 		return
 	}
@@ -243,7 +246,7 @@ func (h *AdminHandler) PatchGeneralInfo(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if req.Name == nil && req.Description == nil && req.AcademicYear == nil {
+	if req.Year == nil && req.Code == nil && req.Slug == nil && req.Name == nil && req.Description == nil && req.AcademicYear == nil {
 		response.UnprocessableEntity(w, "INVALID_INPUT", "Minimal satu field diisi.")
 		return
 	}
@@ -265,6 +268,9 @@ func (h *AdminHandler) PatchGeneralInfo(w http.ResponseWriter, r *http.Request) 
 
 	resp := map[string]interface{}{
 		"id":            dto.ID,
+		"year":          dto.Year,
+		"code":          dto.Code,
+		"slug":          dto.Slug,
 		"name":          dto.Name,
 		"description":   dto.Description,
 		"academic_year": dto.AcademicYear,
@@ -587,6 +593,11 @@ func (h *AdminHandler) GetBrandingLogo(w http.ResponseWriter, r *http.Request) {
 			response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil logo.")
 			return
 		}
+	}
+
+	if file.URL != nil {
+		http.Redirect(w, r, *file.URL, http.StatusFound)
+		return
 	}
 
 	w.Header().Set("Content-Type", file.ContentType)

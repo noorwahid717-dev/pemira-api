@@ -48,6 +48,7 @@ type BrandingFile struct {
 	ContentType string       `json:"content_type"`
 	SizeBytes   int64        `json:"size"`
 	Data        []byte       `json:"-"`
+	URL         *string      `json:"url,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	CreatedByID *int64       `json:"-"`
 }

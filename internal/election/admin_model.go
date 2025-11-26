@@ -6,8 +6,9 @@ type AdminElectionDTO struct {
 	ID                  int64          `json:"id"`
 	Year                int            `json:"year"`
 	Name                string         `json:"name"`
-	Slug                string         `json:"slug"`
-	Description         string         `json:"description"`
+	Code                string         `json:"code"`
+	Slug                string         `json:"slug,omitempty"`
+	Description         *string        `json:"description,omitempty"`
 	AcademicYear        *string        `json:"academic_year,omitempty"`
 	Status              ElectionStatus `json:"status"`
 	CurrentPhase        *string        `json:"current_phase,omitempty"`
@@ -75,6 +76,9 @@ type AdminElectionUpdateRequest struct {
 }
 
 type AdminElectionGeneralUpdateRequest struct {
+	Year         *int    `json:"year,omitempty"`
+	Code         *string `json:"code,omitempty"`
+	Slug         *string `json:"slug,omitempty"`
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	AcademicYear *string `json:"academic_year,omitempty"`
