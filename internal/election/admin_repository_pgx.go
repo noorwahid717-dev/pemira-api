@@ -223,16 +223,18 @@ INSERT INTO elections (
     year,
     name,
     code,
+    slug,
     status,
     online_enabled,
     tps_enabled
-) VALUES ($1, $2, $3, 'DRAFT', $4, $5)
+) VALUES ($1, $2, $3, $4, 'DRAFT', $5, $6)
 RETURNING %s
 `, adminElectionColumns)
 
 	return scanAdminElection(r.db.QueryRow(ctx, q,
 		req.Year,
 		req.Name,
+		req.Slug,
 		req.Slug,
 		req.OnlineEnabled,
 		req.TPSEnabled,
@@ -257,7 +259,7 @@ func (r *PgAdminRepository) UpdateElection(ctx context.Context, id int64, req Ad
 	}
 
 	if req.Slug != nil {
-		updates = append(updates, fmt.Sprintf("code = $%d", argPos))
+		updates = append(updates, fmt.Sprintf("slug = $%d", argPos))
 		args = append(args, *req.Slug)
 		argPos++
 	}
