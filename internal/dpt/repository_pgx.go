@@ -173,11 +173,12 @@ func (r *pgxRepository) ListAllVoters(ctx context.Context, filter ListFilter) ([
 func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID int64, filter ListFilter) ([]VoterWithStatusDTO, int64, error) {
 	whereClause, args := buildWhereClause(electionID, filter)
 
-	// Count query
+	// Count query - use election_voters as source of truth (consistent with dashboard)
 	countQuery := fmt.Sprintf(`
 		SELECT COUNT(*)
-		FROM voters v
-		INNER JOIN voter_status vs ON vs.voter_id = v.id
+		FROM election_voters ev
+		INNER JOIN voters v ON v.id = ev.voter_id
+		LEFT JOIN voter_status vs ON vs.voter_id = ev.voter_id AND vs.election_id = ev.election_id
 		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
 		%s
 	`, whereClause)
@@ -188,7 +189,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 		return nil, 0, fmt.Errorf("count voters: %w", err)
 	}
 
-	// List query
+	// List query - use election_voters as source of truth (consistent with dashboard)
 	listQuery := fmt.Sprintf(`
 		SELECT 
 			v.id,
@@ -201,14 +202,15 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
 			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
-			vs.is_eligible,
-			vs.has_voted,
+			COALESCE(vs.is_eligible, TRUE) as is_eligible,
+			COALESCE(vs.has_voted, FALSE) as has_voted,
 			vs.voted_at,
 			vs.voting_method,
 			v.voting_method,
 			vs.tps_id
-		FROM voters v
-		INNER JOIN voter_status vs ON vs.voter_id = v.id
+		FROM election_voters ev
+		INNER JOIN voters v ON v.id = ev.voter_id
+		LEFT JOIN voter_status vs ON vs.voter_id = ev.voter_id AND vs.election_id = ev.election_id
 		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
 		%s
 		ORDER BY v.nim
@@ -269,6 +271,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID int64, filter ListFilter, fn func(VoterWithStatusDTO) error) error {
 	whereClause, args := buildWhereClause(electionID, filter)
 
+	// Use election_voters as source of truth (consistent with dashboard)
 	query := fmt.Sprintf(`
 		SELECT 
 			v.id,
@@ -281,14 +284,15 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
 			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
-			vs.is_eligible,
-			vs.has_voted,
+			COALESCE(vs.is_eligible, TRUE) as is_eligible,
+			COALESCE(vs.has_voted, FALSE) as has_voted,
 			vs.voted_at,
 			vs.voting_method,
 			v.voting_method,
 			vs.tps_id
-		FROM voters v
-		INNER JOIN voter_status vs ON vs.voter_id = v.id
+		FROM election_voters ev
+		INNER JOIN voters v ON v.id = ev.voter_id
+		LEFT JOIN voter_status vs ON vs.voter_id = ev.voter_id AND vs.election_id = ev.election_id
 		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
 		%s
 		ORDER BY v.nim
@@ -346,8 +350,8 @@ func buildWhereClause(electionID int64, filter ListFilter) (string, []interface{
 	var args []interface{}
 	argIdx := 1
 
-	// Always filter by election
-	conditions = append(conditions, fmt.Sprintf("vs.election_id = $%d", argIdx))
+	// Always filter by election using election_voters table
+	conditions = append(conditions, fmt.Sprintf("ev.election_id = $%d", argIdx))
 	args = append(args, electionID)
 	argIdx++
 

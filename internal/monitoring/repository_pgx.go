@@ -55,15 +55,17 @@ ORDER BY candidate_id
 }
 
 // GetParticipationStats returns eligible/voted counts and participation pct.
+// Uses election_voters as source of truth (consistent with DPT list)
 func (r *PgRepository) GetParticipationStats(ctx context.Context, electionID int64) (*ParticipationStats, error) {
 	const q = `
 SELECT
-    election_id,
-    COUNT(*) FILTER (WHERE is_eligible = TRUE) AS total_eligible,
-    COUNT(*) FILTER (WHERE has_voted = TRUE)  AS total_voted
-FROM voter_status
-WHERE election_id = $1
-GROUP BY election_id
+    ev.election_id,
+    COUNT(*) AS total_eligible,
+    COUNT(*) FILTER (WHERE vs.has_voted = TRUE) AS total_voted
+FROM election_voters ev
+LEFT JOIN voter_status vs ON vs.election_id = ev.election_id AND vs.voter_id = ev.voter_id
+WHERE ev.election_id = $1
+GROUP BY ev.election_id
 `
 	var s ParticipationStats
 	err := r.db.QueryRow(ctx, q, electionID).Scan(
