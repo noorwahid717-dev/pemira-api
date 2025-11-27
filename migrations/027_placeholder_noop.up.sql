@@ -1,0 +1,2 @@
+-- +goose Up
+-- Placeholder to fill migration sequence gap (no-op)

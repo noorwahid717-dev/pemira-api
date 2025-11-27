@@ -1,0 +1,2 @@
+-- +goose Down
+-- Placeholder no-op
