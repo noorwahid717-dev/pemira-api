@@ -9,6 +9,7 @@ type VoterWithStatusDTO struct {
 	FacultyName      string `json:"faculty_name"`
 	StudyProgramName string `json:"study_program_name"`
 	Semester         string `json:"semester,omitempty"`
+	ClassLabel       string `json:"class_label,omitempty"`
 	CohortYear       *int   `json:"cohort_year,omitempty"`
 	Email            string `json:"email"`
 	HasAccount       bool   `json:"has_account"`

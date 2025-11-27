@@ -158,6 +158,7 @@ func (r *pgxRepository) ListAllVoters(ctx context.Context, filter ListFilter) ([
 			return nil, 0, fmt.Errorf("scan voter: %w", err)
 		}
 		item.Semester = strings.TrimSpace(semester)
+		item.ClassLabel = strings.TrimSpace(semester)
 		item.VoterType = voterType
 		items = append(items, item)
 	}
@@ -253,6 +254,7 @@ func (r *pgxRepository) ListVotersForElection(ctx context.Context, electionID in
 		item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
 		item.Status.LastVoteChannel = item.Status.VotingMethod
 		item.Semester = strings.TrimSpace(semester)
+		item.ClassLabel = strings.TrimSpace(semester)
 		item.VoterType = voterType // Always set voter_type
 		items = append(items, item)
 	}
@@ -328,6 +330,7 @@ func (r *pgxRepository) StreamVotersForElection(ctx context.Context, electionID 
 		item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
 		item.Status.LastVoteChannel = item.Status.VotingMethod
 		item.Semester = strings.TrimSpace(semester)
+		item.ClassLabel = strings.TrimSpace(semester)
 		item.VoterType = voterType // Always set voter_type
 
 		if err := fn(item); err != nil {
@@ -487,6 +490,7 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 	item.Status.VotingMethod = resolveVotingMethod(statusMethod, voterMethod)
 	item.Status.LastVoteChannel = item.Status.VotingMethod
 	item.Semester = strings.TrimSpace(semester)
+	item.ClassLabel = strings.TrimSpace(semester)
 	item.VoterType = voterType // Always set voter_type
 
 	return &item, nil
