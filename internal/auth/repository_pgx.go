@@ -377,7 +377,7 @@ func (r *PgRepository) GetUserProfile(ctx context.Context, user *UserAccount) (*
 			&profile.FacultyName,
 			&profile.StudyProgramName,
 			&profile.CohortYear,
-			&profile.ClassLabel,
+			&profile.Semester,
 		)
 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {

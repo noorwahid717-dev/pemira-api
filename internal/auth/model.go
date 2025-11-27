@@ -52,7 +52,6 @@ type UserProfile struct {
 	StudyProgramName string `json:"study_program_name,omitempty"`
 	CohortYear       *int   `json:"cohort_year,omitempty"`
 	Semester         string `json:"semester,omitempty"`
-	ClassLabel       string `json:"class_label,omitempty"` // Kelas untuk mahasiswa
 	TPSCode          string `json:"tps_code,omitempty"`
 	TPSName          string `json:"tps_name,omitempty"`
 	// For lecturers
