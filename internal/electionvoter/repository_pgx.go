@@ -326,10 +326,12 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			v.faculty_code, v.faculty_name,
 			v.study_program_code, v.study_program_name,
 			v.cohort_year, v.academic_status,
-			vs.has_voted
+			vs.has_voted,
+			ua.last_login_at
 		FROM election_voters ev
 		JOIN voters v ON v.id = ev.voter_id
 		LEFT JOIN voter_status vs ON vs.election_id = ev.election_id AND vs.voter_id = ev.voter_id
+		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
 		%s
 		ORDER BY ev.updated_at DESC
 		LIMIT $%d OFFSET $%d
@@ -352,6 +354,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		var cohortYear sql.NullInt32
 		var academicStatus sql.NullString
 		var hasVoted sql.NullBool
+		var lastLoginAt sql.NullTime
 
 		err := rows.Scan(
 			&item.ID,
@@ -374,6 +377,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			&cohortYear,
 			&academicStatus,
 			&hasVoted,
+			&lastLoginAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan election_voters: %w", err)
@@ -386,6 +390,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		item.CohortYear = nullableIntPtr(cohortYear)
 		item.AcademicStatus = nullableStringPtr(academicStatus)
 		item.HasVoted = nullableBoolPtr(hasVoted)
+		item.LastLoginAt = nullableTimePtr(lastLoginAt)
 		items = append(items, item)
 	}
 
@@ -572,6 +577,14 @@ func nullableInt64Ptr(ns sql.NullInt64) *int64 {
 func nullableBoolPtr(nb sql.NullBool) *bool {
 	if nb.Valid {
 		val := nb.Bool
+		return &val
+	}
+	return nil
+}
+
+func nullableTimePtr(nt sql.NullTime) *time.Time {
+	if nt.Valid {
+		val := nt.Time
 		return &val
 	}
 	return nil

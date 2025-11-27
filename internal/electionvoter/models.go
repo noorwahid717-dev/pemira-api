@@ -39,6 +39,7 @@ type ElectionVoter struct {
 	CohortYear      *int       `json:"cohort_year,omitempty"`
 	AcademicStatus  *string    `json:"academic_status,omitempty"`
 	HasVoted        *bool      `json:"has_voted,omitempty"`
+	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
 }
 
 type LookupResult struct {
