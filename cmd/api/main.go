@@ -201,6 +201,7 @@ func main() {
 
 		// Public election routes
 		r.Get("/elections/current", electionHandler.GetCurrent)
+		r.Get("/elections/current-for-registration", electionHandler.GetCurrentForRegistration)
 		r.Get("/elections", electionHandler.ListPublic)
 		r.Get("/elections/{electionID}/phases", electionHandler.GetPublicPhases)
 		r.Get("/elections/{electionID}/timeline", electionHandler.GetPublicPhases)

@@ -25,15 +25,40 @@ func NewServiceLegacy(repo Repository) *Service {
 }
 
 func (s *Service) GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error) {
-	// Try to get VOTING_OPEN election first
+	// Get election with new priority: REGISTRATION_OPEN → REGISTRATION → CAMPAIGN → VOTING_OPEN
 	e, err := s.repo.GetCurrentElection(ctx)
 	if err != nil {
-		// If no VOTING_OPEN, get the most recent non-archived election
+		// If no active election, get the most recent non-archived election
 		elections, listErr := s.repo.ListPublicElections(ctx)
 		if listErr != nil || len(elections) == 0 {
 			return nil, ErrElectionNotFound
 		}
 		e = &elections[0] // Use first (most recent by year DESC)
+	}
+
+	dto := &CurrentElectionDTO{
+		ID:            e.ID,
+		Year:          e.Year,
+		Name:          e.Name,
+		Slug:          e.Slug,
+		Status:        e.Status,
+		VotingStartAt: e.VotingStartAt,
+		VotingEndAt:   e.VotingEndAt,
+		OnlineEnabled: e.OnlineEnabled,
+		TPSEnabled:    e.TPSEnabled,
+	}
+
+	s.enrichWithPhases(ctx, dto)
+
+	return dto, nil
+}
+
+// GetCurrentForRegistration returns election specifically for registration context
+// Priority: REGISTRATION_OPEN → REGISTRATION → CAMPAIGN
+func (s *Service) GetCurrentForRegistration(ctx context.Context) (*CurrentElectionDTO, error) {
+	e, err := s.repo.GetCurrentForRegistration(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	dto := &CurrentElectionDTO{

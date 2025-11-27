@@ -13,6 +13,7 @@ import (
 
 type ElectionService interface {
 	GetCurrentElection(ctx context.Context) (*CurrentElectionDTO, error)
+	GetCurrentForRegistration(ctx context.Context) (*CurrentElectionDTO, error)
 	ListPublicElections(ctx context.Context) ([]CurrentElectionDTO, error)
 	GetPublicPhases(ctx context.Context, electionID int64) (*ElectionPhasesResponse, error)
 	GetMeStatus(ctx context.Context, authUser auth.AuthUser, electionID int64) (*MeStatusDTO, error)
@@ -29,6 +30,7 @@ func NewHandler(svc ElectionService) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/elections/current", h.GetCurrent)
+	r.Get("/elections/current-for-registration", h.GetCurrentForRegistration)
 	r.Get("/elections", h.ListPublic)
 	r.Get("/elections/{electionID}/phases", h.GetPublicPhases)
 	r.Get("/elections/{electionID}/timeline", h.GetPublicPhases) // alias
@@ -49,6 +51,23 @@ func (h *Handler) GetCurrent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrElectionNotFound) {
 			response.NotFound(w, "ELECTION_NOT_FOUND", "Tidak ada pemilu yang sedang berlangsung.")
+			return
+		}
+		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, dto)
+}
+
+// GetCurrentForRegistration handles GET /elections/current-for-registration
+func (h *Handler) GetCurrentForRegistration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	dto, err := h.svc.GetCurrentForRegistration(ctx)
+	if err != nil {
+		if errors.Is(err, ErrElectionNotFound) {
+			response.NotFound(w, "ELECTION_NOT_FOUND", "Tidak ada pemilu yang menerima pendaftaran.")
 			return
 		}
 		response.InternalServerError(w, "INTERNAL_ERROR", "Terjadi kesalahan pada sistem.")

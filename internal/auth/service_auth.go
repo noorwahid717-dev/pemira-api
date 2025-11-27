@@ -146,6 +146,9 @@ func (s *AuthService) RegisterStudent(ctx context.Context, req RegisterStudentRe
 	tpsAllowed := mode == "TPS"
 	_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
 
+	// Auto-enroll voter to the registration election
+	_ = s.repo.EnrollVoterToElection(ctx, regElection.ID, voterID, nim, mode)
+
 	profile := &UserProfile{
 		Name:             name,
 		FacultyName:      req.FacultyName,
@@ -266,6 +269,9 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 		tpsAllowed := mode == "TPS"
 		_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
 
+		// Auto-enroll voter to the registration election
+		_ = s.repo.EnrollVoterToElection(ctx, regElection.ID, voterID, nidn, mode)
+
 		profile := &UserProfile{
 			Name:           req.Name,
 			FacultyName:    req.FacultyName,
@@ -353,6 +359,9 @@ func (s *AuthService) RegisterLecturerStaff(ctx context.Context, req RegisterLec
 		onlineAllowed := mode == "ONLINE"
 		tpsAllowed := mode == "TPS"
 		_ = s.repo.EnsureVoterStatus(ctx, regElection.ID, voterID, mode, onlineAllowed, tpsAllowed)
+
+		// Auto-enroll voter to the registration election
+		_ = s.repo.EnrollVoterToElection(ctx, regElection.ID, voterID, nip, mode)
 
 		profile := &UserProfile{
 			Name:     req.Name,

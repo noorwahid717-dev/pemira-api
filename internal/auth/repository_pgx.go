@@ -561,23 +561,51 @@ func (r *PgRepository) DeleteStaff(ctx context.Context, staffID int64) error {
 	return err
 }
 
-// FindOrCreateRegistrationElection finds the latest election with status not ARCHIVED (REGISTRATION/CAMPAIGN/VOTING_OPEN/CLOSED).
-// If none exists, it will create a placeholder in REGISTRATION status with both channels enabled.
+// FindOrCreateRegistrationElection finds the election for registration.
+// Priority: 1) active_election_id from app_settings, 2) election with REGISTRATION/CAMPAIGN status, 3) create placeholder.
 func (r *PgRepository) FindOrCreateRegistrationElection(ctx context.Context) (*RegistrationElection, error) {
+	// Step 1: Check app_settings table for active_election_id
+	const settingsQuery = `
+		SELECT value::BIGINT
+		FROM app_settings
+		WHERE key = 'active_election_id' AND value IS NOT NULL AND value != ''
+	`
+	var activeElectionID *int64
+	err := r.db.QueryRow(ctx, settingsQuery).Scan(&activeElectionID)
+	
+	// If settings has active_election_id, use that election (no status check)
+	if err == nil && activeElectionID != nil {
+		const getElectionQuery = `
+			SELECT id, status, online_enabled, tps_enabled
+			FROM elections
+			WHERE id = $1
+		`
+		var e RegistrationElection
+		err = r.db.QueryRow(ctx, getElectionQuery, *activeElectionID).Scan(&e.ID, &e.Status, &e.OnlineEnabled, &e.TPSEnabled)
+		if err == nil {
+			return &e, nil
+		}
+		// If election not found, fall through to status-based query
+	}
+
+	// Step 2: Fallback to status-based query (REGISTRATION > CAMPAIGN)
 	const findQuery = `
 		SELECT id, status, online_enabled, tps_enabled
 		FROM elections
-		WHERE status IN ('REGISTRATION','CAMPAIGN','VOTING_OPEN','CLOSED')
-		ORDER BY created_at DESC
+		WHERE status IN ('REGISTRATION','CAMPAIGN')
+		ORDER BY CASE status
+			WHEN 'REGISTRATION' THEN 1
+			WHEN 'CAMPAIGN' THEN 2
+		END, created_at DESC
 		LIMIT 1
 	`
 	var e RegistrationElection
-	err := r.db.QueryRow(ctx, findQuery).Scan(&e.ID, &e.Status, &e.OnlineEnabled, &e.TPSEnabled)
+	err = r.db.QueryRow(ctx, findQuery).Scan(&e.ID, &e.Status, &e.OnlineEnabled, &e.TPSEnabled)
 	if err == nil {
 		return &e, nil
 	}
 
-	// Create placeholder election if not found
+	// Step 3: Create placeholder election if not found
 	code := fmt.Sprintf("AUTO-%d", time.Now().Unix())
 	year := time.Now().Year()
 	createQuery := `
@@ -604,5 +632,18 @@ func (r *PgRepository) EnsureVoterStatus(ctx context.Context, electionID, voterI
 		              updated_at = NOW()
 	`
 	_, err := r.db.Exec(ctx, query, electionID, voterID, preferredMethod, onlineAllowed, tpsAllowed)
+	return err
+}
+
+// EnrollVoterToElection adds a voter to the election_voters table with PENDING status.
+// This ensures newly registered voters automatically appear in the DPT list.
+func (r *PgRepository) EnrollVoterToElection(ctx context.Context, electionID, voterID int64, nim string, votingMethod string) error {
+	query := `
+		INSERT INTO election_voters (election_id, voter_id, nim, status, voting_method, created_at, updated_at)
+		VALUES ($1, $2, $3, 'PENDING', $4, NOW(), NOW())
+		ON CONFLICT ON CONSTRAINT ux_election_voters_election_voter
+		DO NOTHING
+	`
+	_, err := r.db.Exec(ctx, query, electionID, voterID, nim, votingMethod)
 	return err
 }

@@ -45,4 +45,7 @@ type Repository interface {
 
 	// Voter status helpers
 	EnsureVoterStatus(ctx context.Context, electionID, voterID int64, preferredMethod string, onlineAllowed, tpsAllowed bool) error
+	
+	// Election enrollment helper
+	EnrollVoterToElection(ctx context.Context, electionID, voterID int64, nim string, votingMethod string) error
 }

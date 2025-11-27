@@ -28,6 +28,8 @@ var (
 	ErrVoterStatusNotFound = fmt.Errorf("voter status not found")
 )
 
+// GetCurrentElection returns the election with VOTING_OPEN status
+// Priority changed: REGISTRATION → CAMPAIGN → VOTING_OPEN
 func (r *PgRepository) GetCurrentElection(ctx context.Context) (*Election, error) {
 	const q = `
 SELECT
@@ -43,8 +45,14 @@ SELECT
     created_at,
     updated_at
 FROM elections
-WHERE status = 'VOTING_OPEN'
-ORDER BY voting_start_at NULLS LAST, id DESC
+WHERE status IN ('REGISTRATION', 'CAMPAIGN', 'VOTING_OPEN')
+ORDER BY 
+    CASE status
+        WHEN 'REGISTRATION' THEN 1
+        WHEN 'CAMPAIGN' THEN 2
+        WHEN 'VOTING_OPEN' THEN 3
+    END,
+    id DESC
 LIMIT 1
 `
 	var e Election
@@ -68,6 +76,128 @@ LIMIT 1
 		return nil, err
 	}
 	return &e, nil
+}
+
+// GetCurrentForRegistration returns the election currently accepting registrations
+// Priority: REGISTRATION → CAMPAIGN
+func (r *PgRepository) GetCurrentForRegistration(ctx context.Context) (*Election, error) {
+	const q = `
+SELECT
+    id,
+    year,
+    name,
+    code,
+    status,
+    voting_start_at,
+    voting_end_at,
+    online_enabled,
+    tps_enabled,
+    created_at,
+    updated_at
+FROM elections
+WHERE status IN ('REGISTRATION', 'CAMPAIGN')
+ORDER BY 
+    CASE status
+        WHEN 'REGISTRATION' THEN 1
+        WHEN 'CAMPAIGN' THEN 2
+    END,
+    id DESC
+LIMIT 1
+`
+	var e Election
+	err := r.db.QueryRow(ctx, q).Scan(
+		&e.ID,
+		&e.Year,
+		&e.Name,
+		&e.Slug,
+		&e.Status,
+		&e.VotingStartAt,
+		&e.VotingEndAt,
+		&e.OnlineEnabled,
+		&e.TPSEnabled,
+		&e.CreatedAt,
+		&e.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrElectionNotFound
+		}
+		return nil, err
+	}
+	return &e, nil
+}
+
+// GetActiveElection returns election by ID from settings.active_election_id
+// This is the single source of truth for "active election"
+func (r *PgRepository) GetActiveElection(ctx context.Context, settingsElectionID int) (*Election, error) {
+	const q = `
+SELECT
+    id,
+    year,
+    name,
+    code,
+    status,
+    voting_start_at,
+    voting_end_at,
+    online_enabled,
+    tps_enabled,
+    created_at,
+    updated_at
+FROM elections
+WHERE id = $1
+`
+	var e Election
+	err := r.db.QueryRow(ctx, q, settingsElectionID).Scan(
+		&e.ID,
+		&e.Year,
+		&e.Name,
+		&e.Slug,
+		&e.Status,
+		&e.VotingStartAt,
+		&e.VotingEndAt,
+		&e.OnlineEnabled,
+		&e.TPSEnabled,
+		&e.CreatedAt,
+		&e.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrElectionNotFound
+		}
+		return nil, err
+	}
+	return &e, nil
+}
+
+// IsRegistrationAllowed validates if election is accepting new registrations
+func (r *PgRepository) IsRegistrationAllowed(ctx context.Context, election *Election) (bool, string) {
+	if election == nil {
+		return false, "Election not found"
+	}
+
+	// Check status - allow REGISTRATION, CAMPAIGN
+	// Note: REGISTRATION_OPEN is in Go constants but not in DB enum yet
+	allowedStatuses := map[ElectionStatus]bool{
+		ElectionStatusRegistration: true,
+		ElectionStatusCampaign:     true,
+	}
+
+	if !allowedStatuses[election.Status] {
+		return false, "Masa pendaftaran sudah ditutup"
+	}
+
+	// TODO: Add date-based validation if registration_start_at and registration_end_at exist
+	// if election.RegistrationStartAt != nil && election.RegistrationEndAt != nil {
+	//     now := time.Now()
+	//     if now.Before(*election.RegistrationStartAt) {
+	//         return false, "Pendaftaran belum dibuka"
+	//     }
+	//     if now.After(*election.RegistrationEndAt) {
+	//         return false, "Masa pendaftaran sudah ditutup"
+	//     }
+	// }
+
+	return true, ""
 }
 
 func (r *PgRepository) ListPublicElections(ctx context.Context) ([]Election, error) {
