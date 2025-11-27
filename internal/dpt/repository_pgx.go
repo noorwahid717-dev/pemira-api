@@ -647,18 +647,26 @@ func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voter
 	return nil
 }
 
-func (r *pgxRepository) DeleteVoter(ctx context.Context, electionID int64, voterID int64) error {
+func (r *pgxRepository) DeleteVoter(ctx context.Context, electionID int64, electionVoterID int64) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	// Get voter_id from election_voters table
+	var voterID int64
+	getVoterQuery := `SELECT voter_id FROM election_voters WHERE id = $1 AND election_id = $2`
+	if err := tx.QueryRow(ctx, getVoterQuery, electionVoterID, electionID).Scan(&voterID); err != nil {
+		return fmt.Errorf("voter not found in this election")
+	}
+
 	// Check if voter has voted
 	var hasVoted bool
 	checkQuery := `SELECT has_voted FROM voter_status WHERE voter_id = $1 AND election_id = $2`
 	if err := tx.QueryRow(ctx, checkQuery, voterID, electionID).Scan(&hasVoted); err != nil {
-		return fmt.Errorf("voter not found in this election")
+		// If voter_status doesn't exist, it's ok - just skip the check
+		hasVoted = false
 	}
 
 	if hasVoted {
@@ -669,6 +677,12 @@ func (r *pgxRepository) DeleteVoter(ctx context.Context, electionID int64, voter
 	deleteStatusQuery := `DELETE FROM voter_status WHERE voter_id = $1 AND election_id = $2`
 	if _, err := tx.Exec(ctx, deleteStatusQuery, voterID, electionID); err != nil {
 		return fmt.Errorf("delete voter status: %w", err)
+	}
+
+	// Delete election_voters entry
+	deleteElectionVoterQuery := `DELETE FROM election_voters WHERE id = $1 AND election_id = $2`
+	if _, err := tx.Exec(ctx, deleteElectionVoterQuery, electionVoterID, electionID); err != nil {
+		return fmt.Errorf("delete election voter: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

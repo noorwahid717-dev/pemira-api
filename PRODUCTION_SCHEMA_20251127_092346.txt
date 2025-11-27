@@ -1,0 +1,485 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                  PRODUCTION DATABASE - COMPLETE SCHEMA                   ║
+║                         ALL TABLES AND COLUMNS                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+Generated: 2025-11-27 02:20 UTC
+Database: wgompdtswdesvswbydon
+Schema: myschema
+
+═══════════════════════════════════════════════════════════════════════════
+
+Output format is unaligned.
+Field separator is " | ".
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: app_settings
+═══════════════════════════════════════════════════════════════════════════
+
+  1. key                       | character varying              | NOT NULL | 
+  2. value                     | text                           | NOT NULL | 
+  3. description               | text                           | NULL     | 
+  4. updated_at                | timestamp without time zone    | NULL     | now()
+  5. updated_by                | integer                        | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: branding_files
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | uuid                           | NOT NULL | 
+  2. election_id               | bigint                         | NOT NULL | 
+  3. slot                      | text                           | NOT NULL | 
+  4. content_type              | text                           | NOT NULL | 
+  5. size_bytes                | bigint                         | NOT NULL | 
+  6. data                      | bytea                          | NOT NULL | 
+  7. created_at                | timestamp with time zone       | NOT NULL | now()
+  8. created_by_admin_id       | bigint                         | NULL     | 
+  9. storage_path              | text                           | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: branding_settings
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('branding_settings_id_seq'::regc
+  2. election_id               | bigint                         | NOT NULL | 
+  3. primary_logo_id           | uuid                           | NULL     | 
+  4. secondary_logo_id         | uuid                           | NULL     | 
+  5. updated_by_admin_id       | bigint                         | NULL     | 
+  6. updated_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: candidate_media
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | uuid                           | NOT NULL | 
+  2. candidate_id              | bigint                         | NOT NULL | 
+  3. slot                      | text                           | NOT NULL | 
+  4. file_name                 | text                           | NOT NULL | 
+  5. content_type              | text                           | NOT NULL | 
+  6. size_bytes                | bigint                         | NOT NULL | 
+  7. data                      | bytea                          | NOT NULL | 
+  8. created_at                | timestamp with time zone       | NOT NULL | now()
+  9. created_by_admin_id       | bigint                         | NULL     | 
+ 10. storage_path              | text                           | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: candidate_qr_codes
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('candidate_qr_codes_id_seq'::reg
+  2. election_id               | bigint                         | NOT NULL | 
+  3. candidate_id              | bigint                         | NOT NULL | 
+  4. version                   | integer                        | NOT NULL | 1
+  5. qr_token                  | text                           | NOT NULL | 
+  6. is_active                 | boolean                        | NOT NULL | true
+  7. created_at                | timestamp with time zone       | NOT NULL | now()
+  8. rotated_at                | timestamp with time zone       | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: candidates
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('candidates_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. number                    | integer                        | NOT NULL | 
+  8. vision                    | text                           | NULL     | 
+ 10. photo_url                 | text                           | NULL     | 
+ 11. status                    | USER-DEFINED                   | NOT NULL | 'PENDING'::candidate_status
+ 12. created_at                | timestamp with time zone       | NOT NULL | now()
+ 13. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 14. name                      | text                           | NOT NULL | 
+ 15. short_bio                 | text                           | NULL     | ''::text
+ 16. long_bio                  | text                           | NULL     | ''::text
+ 17. tagline                   | text                           | NULL     | ''::text
+ 18. faculty_name              | text                           | NULL     | ''::text
+ 19. study_program_name        | text                           | NULL     | ''::text
+ 20. cohort_year               | integer                        | NULL     | 
+ 21. missions                  | jsonb                          | NULL     | '[]'::jsonb
+ 22. main_programs             | jsonb                          | NULL     | '[]'::jsonb
+ 23. media                     | jsonb                          | NULL     | '{}'::jsonb
+ 24. social_links              | jsonb                          | NULL     | '[]'::jsonb
+ 25. photo_media_id            | uuid                           | NULL     | 
+ 26. updated_by_admin_id       | bigint                         | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: election_voters
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('election_voters_id_seq'::regcla
+  2. election_id               | bigint                         | NOT NULL | 
+  3. voter_id                  | bigint                         | NOT NULL | 
+  4. nim                       | text                           | NOT NULL | 
+  5. status                    | USER-DEFINED                   | NOT NULL | 'PENDING'::election_voter_status
+  6. voting_method             | USER-DEFINED                   | NOT NULL | 'ONLINE'::voting_method
+  7. tps_id                    | bigint                         | NULL     | 
+  8. checked_in_at             | timestamp with time zone       | NULL     | 
+  9. voted_at                  | timestamp with time zone       | NULL     | 
+ 10. created_at                | timestamp with time zone       | NOT NULL | now()
+ 11. updated_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: elections
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('elections_id_seq'::regclass)
+  2. code                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. year                      | integer                        | NOT NULL | 
+  5. status                    | USER-DEFINED                   | NOT NULL | 'DRAFT'::election_status
+  6. online_enabled            | boolean                        | NOT NULL | true
+  7. tps_enabled               | boolean                        | NOT NULL | true
+  8. registration_start_at     | timestamp with time zone       | NULL     | 
+  9. registration_end_at       | timestamp with time zone       | NULL     | 
+ 10. campaign_start_at         | timestamp with time zone       | NULL     | 
+ 11. campaign_end_at           | timestamp with time zone       | NULL     | 
+ 12. voting_start_at           | timestamp with time zone       | NULL     | 
+ 13. voting_end_at             | timestamp with time zone       | NULL     | 
+ 14. recap_start_at            | timestamp with time zone       | NULL     | 
+ 15. recap_end_at              | timestamp with time zone       | NULL     | 
+ 16. description               | text                           | NULL     | 
+ 17. created_at                | timestamp with time zone       | NOT NULL | now()
+ 18. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 19. verification_start_at     | timestamp with time zone       | NULL     | 
+ 20. verification_end_at       | timestamp with time zone       | NULL     | 
+ 21. quiet_start_at            | timestamp with time zone       | NULL     | 
+ 22. quiet_end_at              | timestamp with time zone       | NULL     | 
+ 23. announcement_at           | timestamp with time zone       | NULL     | 
+ 24. finished_at               | timestamp with time zone       | NULL     | 
+ 25. academic_year             | text                           | NULL     | 
+ 26. current_phase             | text                           | NULL     | 
+ 27. online_login_url          | text                           | NULL     | 
+ 28. online_max_sessions_per_v | integer                        | NULL     | 
+ 29. tps_require_checkin       | boolean                        | NULL     | true
+ 30. tps_require_ballot_qr     | boolean                        | NULL     | true
+ 31. tps_max                   | integer                        | NULL     | 
+ 32. slug                      | text                           | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: faculties
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('faculties_id_seq'::regclass)
+  2. code                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  5. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: lecturer_positions
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('lecturer_positions_id_seq'::reg
+  2. category                  | text                           | NOT NULL | 
+  3. code                      | text                           | NOT NULL | 
+  4. name                      | text                           | NOT NULL | 
+  5. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  6. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: lecturer_units
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('lecturer_units_id_seq'::regclas
+  2. code                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  5. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: lecturers
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('lecturers_id_seq'::regclass)
+  2. nidn                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. email                     | text                           | NULL     | 
+  5. faculty_code              | text                           | NULL     | 
+  6. faculty_name              | text                           | NULL     | 
+  7. department_code           | text                           | NULL     | 
+  8. department_name           | text                           | NULL     | 
+  9. position                  | text                           | NULL     | 
+ 10. employment_status         | text                           | NULL     | 
+ 11. created_at                | timestamp with time zone       | NOT NULL | now()
+ 12. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 13. unit_id                   | bigint                         | NULL     | 
+ 14. position_id               | bigint                         | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: migration_history
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | integer                        | NOT NULL | nextval('migration_history_id_seq'::regc
+  2. version                   | integer                        | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. applied_at                | timestamp with time zone       | NOT NULL | now()
+  5. success                   | boolean                        | NOT NULL | true
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: registration_tokens
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('registration_tokens_id_seq'::re
+  2. election_id               | bigint                         | NOT NULL | 
+  3. voter_id                  | bigint                         | NOT NULL | 
+  4. tps_id                    | bigint                         | NULL     | 
+  5. token                     | text                           | NOT NULL | 
+  6. expires_at                | timestamp with time zone       | NULL     | 
+  7. used_at                   | timestamp with time zone       | NULL     | 
+  8. created_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: schema_migrations
+═══════════════════════════════════════════════════════════════════════════
+
+  1. version                   | bigint                         | NOT NULL | 
+  2. dirty                     | boolean                        | NOT NULL | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: staff_members
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('staff_members_id_seq'::regclass
+  2. nip                       | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. email                     | text                           | NULL     | 
+  5. unit_code                 | text                           | NULL     | 
+  6. unit_name                 | text                           | NULL     | 
+  7. position                  | text                           | NULL     | 
+  8. employment_status         | text                           | NULL     | 
+  9. created_at                | timestamp with time zone       | NOT NULL | now()
+ 10. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 11. unit_id                   | bigint                         | NULL     | 
+ 12. position_id               | bigint                         | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: staff_positions
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('staff_positions_id_seq'::regcla
+  2. code                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  5. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: staff_units
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('staff_units_id_seq'::regclass)
+  2. code                      | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  5. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: students
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('students_id_seq'::regclass)
+  2. nim                       | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. faculty_code              | text                           | NULL     | 
+  5. program_code              | text                           | NULL     | 
+  6. cohort_year               | integer                        | NULL     | 
+  7. class_label               | text                           | NULL     | 
+  8. created_at                | timestamp with time zone       | NULL     | now()
+  9. updated_at                | timestamp with time zone       | NULL     | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: study_programs
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('study_programs_id_seq'::regclas
+  2. faculty_id                | bigint                         | NOT NULL | 
+  3. code                      | text                           | NOT NULL | 
+  4. name                      | text                           | NOT NULL | 
+  5. level                     | text                           | NOT NULL | 
+  6. created_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+  7. updated_at                | timestamp without time zone    | NULL     | CURRENT_TIMESTAMP
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: tps
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('tps_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. code                      | text                           | NOT NULL | 
+  4. name                      | text                           | NOT NULL | 
+  5. location                  | text                           | NOT NULL | 
+  6. status                    | USER-DEFINED                   | NOT NULL | 'DRAFT'::tps_status
+  7. voting_date               | date                           | NOT NULL | 
+  8. open_time                 | time without time zone         | NOT NULL | 
+  9. close_time                | time without time zone         | NOT NULL | 
+ 10. capacity_estimate         | integer                        | NULL     | 
+ 11. area_faculty_id           | bigint                         | NULL     | 
+ 12. created_at                | timestamp with time zone       | NOT NULL | now()
+ 13. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 14. pic_name                  | text                           | NULL     | 
+ 15. pic_phone                 | text                           | NULL     | 
+ 16. notes                     | text                           | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: tps_ballot_scans
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('tps_ballot_scans_id_seq'::regcl
+  2. election_id               | bigint                         | NOT NULL | 
+  3. tps_id                    | bigint                         | NOT NULL | 
+  4. checkin_id                | bigint                         | NOT NULL | 
+  5. voter_id                  | bigint                         | NOT NULL | 
+  6. candidate_id              | bigint                         | NULL     | 
+  7. candidate_qr_id           | bigint                         | NULL     | 
+  8. raw_payload               | text                           | NOT NULL | 
+  9. payload_valid             | boolean                        | NOT NULL | false
+ 10. status                    | USER-DEFINED                   | NOT NULL | 'SCANNED'::ballot_scan_status
+ 11. rejected_reason           | text                           | NULL     | 
+ 12. scanned_by_user_id        | bigint                         | NOT NULL | 
+ 13. scanned_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: tps_checkins
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('tps_checkins_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. tps_id                    | bigint                         | NOT NULL | 
+  4. qr_id                     | bigint                         | NULL     | 
+  5. voter_id                  | bigint                         | NOT NULL | 
+  6. status                    | USER-DEFINED                   | NOT NULL | 'PENDING'::tps_checkin_status
+  7. scan_at                   | timestamp with time zone       | NOT NULL | now()
+  8. approved_at               | timestamp with time zone       | NULL     | 
+  9. approved_by_id            | bigint                         | NULL     | 
+ 10. rejection_reason          | text                           | NULL     | 
+ 11. expires_at                | timestamp with time zone       | NULL     | 
+ 12. created_at                | timestamp with time zone       | NOT NULL | now()
+ 13. voted_at                  | timestamp with time zone       | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: tps_qr
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('tps_qr_id_seq'::regclass)
+  2. tps_id                    | bigint                         | NOT NULL | 
+  3. qr_token                  | text                           | NOT NULL | 
+  4. is_active                 | boolean                        | NOT NULL | true
+  5. created_at                | timestamp with time zone       | NOT NULL | now()
+  6. rotated_at                | timestamp with time zone       | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: user_accounts
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('user_accounts_id_seq'::regclass
+  2. username                  | text                           | NOT NULL | 
+  3. email                     | text                           | NOT NULL | 
+  4. password_hash             | text                           | NOT NULL | 
+  5. full_name                 | text                           | NOT NULL | 
+  6. role                      | USER-DEFINED                   | NOT NULL | 'VIEWER'::user_role
+  7. is_active                 | boolean                        | NOT NULL | true
+  8. created_at                | timestamp with time zone       | NOT NULL | now()
+  9. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 10. lecturer_id               | bigint                         | NULL     | 
+ 11. staff_id                  | bigint                         | NULL     | 
+ 20. voter_id                  | bigint                         | NULL     | 
+ 21. tps_id                    | bigint                         | NULL     | 
+ 22. last_login_at             | timestamp with time zone       | NULL     | 
+ 23. login_count               | integer                        | NULL     | 0
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: user_sessions
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('user_sessions_id_seq'::regclass
+  2. user_id                   | bigint                         | NOT NULL | 
+  3. refresh_token_hash        | text                           | NOT NULL | 
+  4. user_agent                | text                           | NULL     | 
+  5. ip_address                | inet                           | NULL     | 
+  6. created_at                | timestamp with time zone       | NOT NULL | now()
+  7. expires_at                | timestamp with time zone       | NOT NULL | 
+  8. revoked_at                | timestamp with time zone       | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: vote_tokens
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('vote_tokens_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. voter_id                  | bigint                         | NOT NULL | 
+  4. token_hash                | text                           | NOT NULL | 
+  5. method                    | USER-DEFINED                   | NOT NULL | 
+  6. tps_id                    | bigint                         | NULL     | 
+  7. issued_at                 | timestamp with time zone       | NOT NULL | now()
+  8. used_at                   | timestamp with time zone       | NULL     | 
+  9. created_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: voter_status
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('voter_status_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. voter_id                  | bigint                         | NOT NULL | 
+  4. is_eligible               | boolean                        | NOT NULL | true
+  5. has_voted                 | boolean                        | NOT NULL | false
+  6. voting_method             | USER-DEFINED                   | NULL     | 
+  7. tps_id                    | bigint                         | NULL     | 
+  8. voted_at                  | timestamp with time zone       | NULL     | 
+  9. vote_token_hash           | text                           | NULL     | 
+ 10. created_at                | timestamp with time zone       | NOT NULL | now()
+ 11. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 12. preferred_method          | USER-DEFINED                   | NULL     | 
+ 13. online_allowed            | boolean                        | NOT NULL | true
+ 14. tps_allowed               | boolean                        | NOT NULL | true
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: voter_tps_qr
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('voter_tps_qr_id_seq'::regclass)
+  2. voter_id                  | bigint                         | NOT NULL | 
+  3. election_id               | bigint                         | NOT NULL | 
+  4. qr_token                  | text                           | NOT NULL | 
+  5. is_active                 | boolean                        | NOT NULL | true
+  6. rotated_at                | timestamp with time zone       | NULL     | 
+  7. created_at                | timestamp with time zone       | NOT NULL | now()
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: voters
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('voters_id_seq'::regclass)
+  2. nim                       | text                           | NOT NULL | 
+  3. name                      | text                           | NOT NULL | 
+  4. email                     | text                           | NULL     | 
+  5. faculty_code              | text                           | NULL     | 
+  6. faculty_name              | text                           | NULL     | 
+  7. study_program_code        | text                           | NULL     | 
+  8. study_program_name        | text                           | NULL     | 
+  9. cohort_year               | integer                        | NULL     | 
+ 10. class_label               | text                           | NULL     | 
+ 11. academic_status           | USER-DEFINED                   | NOT NULL | 'ACTIVE'::academic_status
+ 12. created_at                | timestamp with time zone       | NOT NULL | now()
+ 13. updated_at                | timestamp with time zone       | NOT NULL | now()
+ 14. voter_type                | text                           | NULL     | 'STUDENT'::text
+ 15. voting_method             | USER-DEFINED                   | NULL     | 'ONLINE'::voting_method
+ 16. phone                     | character varying              | NULL     | 
+ 17. photo_url                 | text                           | NULL     | 
+ 18. bio                       | text                           | NULL     | 
+ 19. voting_method_preference  | character varying              | NULL     | 'ONLINE'::character varying
+ 20. student_id                | bigint                         | NULL     | 
+ 21. lecturer_id               | bigint                         | NULL     | 
+ 22. staff_id                  | bigint                         | NULL     | 
+
+═══════════════════════════════════════════════════════════════════════════
+TABLE: votes
+═══════════════════════════════════════════════════════════════════════════
+
+  1. id                        | bigint                         | NOT NULL | nextval('votes_id_seq'::regclass)
+  2. election_id               | bigint                         | NOT NULL | 
+  3. candidate_id              | bigint                         | NOT NULL | 
+  4. token_hash                | text                           | NOT NULL | 
+  5. channel                   | USER-DEFINED                   | NOT NULL | 
+  6. tps_id                    | bigint                         | NULL     | 
+  7. cast_at                   | timestamp with time zone       | NOT NULL | now()
+  8. candidate_qr_id           | bigint                         | NULL     | 
+  9. ballot_scan_id            | bigint                         | NULL     | 

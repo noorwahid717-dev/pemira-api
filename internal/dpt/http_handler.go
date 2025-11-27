@@ -405,7 +405,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, voter)
 }
 
-// DELETE /admin/elections/{electionID}/voters/{voterID}
+// DELETE /admin/elections/{electionID}/voters/{electionVoterID}
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -415,15 +415,16 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voterIDStr := chi.URLParam(r, "voterID")
-	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
-	if err != nil || voterID <= 0 {
+	// voterID parameter is actually election_voter_id
+	electionVoterIDStr := chi.URLParam(r, "voterID")
+	electionVoterID, err := strconv.ParseInt(electionVoterIDStr, 10, 64)
+	if err != nil || electionVoterID <= 0 {
 		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
 		return
 	}
 
-	if err := h.svc.DeleteVoter(ctx, electionID, voterID); err != nil {
-		slog.Error("failed to delete voter", "error", err, "voter_id", voterID)
+	if err := h.svc.DeleteVoter(ctx, electionID, electionVoterID); err != nil {
+		slog.Error("failed to delete voter", "error", err, "election_voter_id", electionVoterID)
 
 		errMsg := err.Error()
 		if errMsg == "voter not found in this election" {
