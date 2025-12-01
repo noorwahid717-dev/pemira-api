@@ -2,6 +2,7 @@ package voter
 
 import (
 	"encoding/json"
+"strconv"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -29,7 +30,7 @@ func (h *ProfileHandler) RegisterRoutes(r chi.Router) {
 	r.Delete("/voters/me/photo", h.DeletePhoto)
 }
 
-// GetCompleteProfile handles GET /voters/me/complete-profile
+// GetCompleteProfile handles GET /voters/me/complete-profile?election_id={id}
 func (h *ProfileHandler) GetCompleteProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := ctxkeys.GetUserID(r.Context())
 	if !ok {
@@ -43,7 +44,15 @@ func (h *ProfileHandler) GetCompleteProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	profile, err := h.service.GetCompleteProfile(r.Context(), voterID, userID)
+	// Get election_id from query parameter (optional, will use active election if not provided)
+	var electionID *int64
+	if electionIDStr := r.URL.Query().Get("election_id"); electionIDStr != "" {
+		if id, err := strconv.ParseInt(electionIDStr, 10, 64); err == nil && id > 0 {
+			electionID = &id
+		}
+	}
+
+	profile, err := h.service.GetCompleteProfile(r.Context(), voterID, userID, electionID)
 	if err != nil {
 		h.handleError(w, err)
 		return

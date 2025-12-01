@@ -36,8 +36,22 @@ func (s *Service) GetVoterStatus(ctx context.Context, voterID, electionID int64)
 
 // Profile methods
 
-func (s *Service) GetCompleteProfile(ctx context.Context, voterID int64, userID int64) (*CompleteProfileResponse, error) {
-	return s.repo.GetCompleteProfile(ctx, voterID, userID)
+func (s *Service) GetCompleteProfile(ctx context.Context, voterID int64, userID int64, electionID *int64) (*CompleteProfileResponse, error) {
+	// If election_id not provided, get the active/latest election
+	var targetElectionID int64
+	if electionID != nil {
+		targetElectionID = *electionID
+	} else {
+		// Get active election from repository
+		activeElectionID, err := s.repo.GetActiveElectionID(ctx)
+		if err != nil {
+			// If no active election, use latest election or return error
+			return nil, fmt.Errorf("no active election found: %w", err)
+		}
+		targetElectionID = activeElectionID
+	}
+	
+	return s.repo.GetCompleteProfile(ctx, voterID, userID, targetElectionID)
 }
 
 func (s *Service) UpdateProfile(ctx context.Context, voterID int64, req *UpdateProfileRequest) error {

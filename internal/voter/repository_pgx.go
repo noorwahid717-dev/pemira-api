@@ -233,7 +233,34 @@ func (r *PgRepository) UpdateElectionStatus(ctx context.Context, status *VoterEl
 
 // Profile-specific methods
 
-func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, userID int64) (*CompleteProfileResponse, error) {
+func (r *PgRepository) GetActiveElectionID(ctx context.Context) (int64, error) {
+	query := `
+		SELECT id 
+		FROM elections 
+		WHERE status IN ('REGISTRATION', 'CAMPAIGN', 'VOTING_OPEN')
+		ORDER BY voting_start_at DESC
+		LIMIT 1
+	`
+	
+	var electionID int64
+	err := r.db.QueryRow(ctx, query).Scan(&electionID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// If no active election, get the latest one
+			query = `SELECT id FROM elections ORDER BY id DESC LIMIT 1`
+			err = r.db.QueryRow(ctx, query).Scan(&electionID)
+			if err != nil {
+				return 0, errors.New("no elections found")
+			}
+		} else {
+			return 0, err
+		}
+	}
+	
+	return electionID, nil
+}
+
+func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, userID int64, electionID int64) (*CompleteProfileResponse, error) {
 	query := `
 		WITH voter_info AS (
 			SELECT 
@@ -258,24 +285,23 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 		),
 		voting_info AS (
 			SELECT 
-				vs.has_voted,
-				vs.voted_at,
-				vs.voting_method::text as method,
+				CASE WHEN ev.voted_at IS NOT NULL THEN true ELSE false END as has_voted,
+				ev.voted_at,
+				ev.voting_method::text as method,
 				t.name as tps_name,
 				t.location as tps_location
-			FROM voter_status vs
-			LEFT JOIN tps t ON vs.tps_id = t.id
-			WHERE vs.voter_id = $1
-			ORDER BY vs.election_id DESC
+			FROM election_voters ev
+			LEFT JOIN tps t ON ev.tps_id = t.id
+			WHERE ev.voter_id = $1 AND ev.election_id = $3
 			LIMIT 1
 		),
 		participation AS (
 			SELECT 
 				COUNT(*) as total_elections,
-				COUNT(CASE WHEN vs.has_voted THEN 1 END) as participated,
-				MAX(vs.voted_at) as last_participation
-			FROM voter_status vs
-			WHERE vs.voter_id = $1
+				COUNT(CASE WHEN ev.voted_at IS NOT NULL THEN 1 END) as participated,
+				MAX(ev.voted_at) as last_participation
+			FROM election_voters ev
+			WHERE ev.voter_id = $1
 		)
 		SELECT 
 			vi.voter_id, vi.name, vi.username, vi.email, vi.phone,
@@ -300,7 +326,7 @@ func (r *PgRepository) GetCompleteProfile(ctx context.Context, voterID int64, us
 	var response CompleteProfileResponse
 	var semester string
 
-	err := r.db.QueryRow(ctx, query, voterID, userID).Scan(
+	err := r.db.QueryRow(ctx, query, voterID, userID, electionID).Scan(
 		&response.PersonalInfo.VoterID,
 		&response.PersonalInfo.Name,
 		&response.PersonalInfo.Username,

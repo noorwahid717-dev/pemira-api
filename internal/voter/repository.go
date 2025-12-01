@@ -18,7 +18,8 @@ type Repository interface {
 	UpdateElectionStatus(ctx context.Context, status *VoterElectionStatus) error
 	
 	// Profile methods
-	GetCompleteProfile(ctx context.Context, voterID int64, userID int64) (*CompleteProfileResponse, error)
+	GetActiveElectionID(ctx context.Context) (int64, error)
+	GetCompleteProfile(ctx context.Context, voterID int64, userID int64, electionID int64) (*CompleteProfileResponse, error)
 	UpdateProfile(ctx context.Context, voterID int64, req *UpdateProfileRequest) error
 	UpdateVotingMethod(ctx context.Context, voterID, electionID int64, method string) error
 	GetParticipationStats(ctx context.Context, voterID int64) (*ParticipationStatsResponse, error)
