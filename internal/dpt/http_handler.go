@@ -320,6 +320,7 @@ func (h *Handler) Export(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /admin/elections/{electionID}/voters/{voterID}
+// Note: voterID here is actually election_voter_id (enrollment ID)
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -329,16 +330,16 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voterIDStr := chi.URLParam(r, "voterID")
-	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
-	if err != nil || voterID <= 0 {
+	electionVoterIDStr := chi.URLParam(r, "voterID")
+	electionVoterID, err := strconv.ParseInt(electionVoterIDStr, 10, 64)
+	if err != nil || electionVoterID <= 0 {
 		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
 		return
 	}
 
-	voter, err := h.svc.GetVoterByID(ctx, electionID, voterID)
+	voter, err := h.svc.GetVoterByID(ctx, electionID, electionVoterID)
 	if err != nil {
-		slog.Error("failed to get voter", "error", err, "voter_id", voterID)
+		slog.Error("failed to get voter", "error", err, "election_voter_id", electionVoterID)
 		response.NotFound(w, "VOTER_NOT_FOUND", "Pemilih tidak ditemukan.")
 		return
 	}
@@ -347,6 +348,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // PUT /admin/elections/{electionID}/voters/{voterID}
+// Note: voterID here is actually election_voter_id (enrollment ID)
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -356,9 +358,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	voterIDStr := chi.URLParam(r, "voterID")
-	voterID, err := strconv.ParseInt(voterIDStr, 10, 64)
-	if err != nil || voterID <= 0 {
+	electionVoterIDStr := chi.URLParam(r, "voterID")
+	electionVoterID, err := strconv.ParseInt(electionVoterIDStr, 10, 64)
+	if err != nil || electionVoterID <= 0 {
 		response.BadRequest(w, "VALIDATION_ERROR", "voterID tidak valid.")
 		return
 	}
@@ -378,8 +380,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		updates.VotingMethod = &method
 	}
 
-	if err := h.svc.UpdateVoter(ctx, electionID, voterID, updates); err != nil {
-		slog.Error("failed to update voter", "error", err, "voter_id", voterID)
+	if err := h.svc.UpdateVoter(ctx, electionID, electionVoterID, updates); err != nil {
+		slog.Error("failed to update voter", "error", err, "election_voter_id", electionVoterID)
 
 		errMsg := err.Error()
 		if errMsg == "voter not found in this election" {
@@ -396,7 +398,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get updated voter
-	voter, err := h.svc.GetVoterByID(ctx, electionID, voterID)
+	voter, err := h.svc.GetVoterByID(ctx, electionID, electionVoterID)
 	if err != nil {
 		response.InternalServerError(w, "INTERNAL_ERROR", "Gagal mengambil data pemilih.")
 		return

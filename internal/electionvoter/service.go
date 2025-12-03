@@ -68,6 +68,21 @@ func (s *Service) UpsertAndEnroll(ctx context.Context, electionID int64, in Upse
 	}
 	in.AcademicStatus = &normalizedStatus
 
+	// Jika semester diberikan, validasi dan hitung cohort_year jika belum ada
+	if in.Semester != nil {
+		if *in.Semester < 1 || *in.Semester > 20 {
+			return nil, shared.ErrBadRequest
+		}
+		
+		// Jika cohort_year tidak diberikan, hitung dari semester
+		// Formula: cohort_year = current_year - ((semester - 1) / 2)
+		if in.CohortYear == nil && in.VoterType == "STUDENT" {
+			currentYear := 2025 // TODO: gunakan tahun sekarang dari context atau config
+			cohortYear := currentYear - ((*in.Semester - 1) / 2)
+			in.CohortYear = &cohortYear
+		}
+	}
+
 	return s.repo.UpsertAndEnroll(ctx, electionID, in)
 }
 
@@ -104,6 +119,12 @@ func (s *Service) UpdateEnrollment(ctx context.Context, electionID int64, enroll
 			return nil, shared.ErrBadRequest
 		}
 		in.VotingMethod = &method
+	}
+
+	if in.Semester != nil {
+		if *in.Semester < 1 || *in.Semester > 20 {
+			return nil, shared.ErrBadRequest
+		}
 	}
 
 	return s.repo.UpdateEnrollment(ctx, electionID, enrollmentID, in)

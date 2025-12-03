@@ -106,8 +106,9 @@ func (s *Service) ExportStream(
 	return s.repo.StreamVotersForElection(ctx, electionID, filter, fn)
 }
 
-func (s *Service) GetVoterByID(ctx context.Context, electionID int64, voterID int64) (*VoterWithStatusDTO, error) {
-	voter, err := s.repo.GetVoterByID(ctx, electionID, voterID)
+// GetVoterByID retrieves voter details by election_voter_id (enrollment ID)
+func (s *Service) GetVoterByID(ctx context.Context, electionID int64, electionVoterID int64) (*VoterWithStatusDTO, error) {
+	voter, err := s.repo.GetVoterByID(ctx, electionID, electionVoterID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,8 +121,9 @@ func (s *Service) GetVoterByID(ctx context.Context, electionID int64, voterID in
 	return voter, nil
 }
 
-func (s *Service) UpdateVoter(ctx context.Context, electionID int64, voterID int64, updates VoterUpdateDTO) error {
-	return s.repo.UpdateVoter(ctx, electionID, voterID, updates)
+// UpdateVoter updates voter enrollment details by election_voter_id (enrollment ID)
+func (s *Service) UpdateVoter(ctx context.Context, electionID int64, electionVoterID int64, updates VoterUpdateDTO) error {
+	return s.repo.UpdateVoter(ctx, electionID, electionVoterID, updates)
 }
 
 func (s *Service) DeleteVoter(ctx context.Context, electionID int64, voterID int64) error {

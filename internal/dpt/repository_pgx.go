@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -436,7 +437,8 @@ func buildWhereClauseAllVoters(filter ListFilter) (string, []interface{}) {
 	return whereClause, args
 }
 
-func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, voterID int64) (*VoterWithStatusDTO, error) {
+// GetVoterByID retrieves voter by election_voter_id (enrollment ID)
+func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, electionVoterID int64) (*VoterWithStatusDTO, error) {
 	query := `
 		SELECT 
 			v.id,
@@ -449,26 +451,26 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 			COALESCE(v.email, ''),
 			(ua.id IS NOT NULL) AS has_account,
 			COALESCE(ua.role::TEXT, v.voter_type, '') AS voter_type,
-			vs.is_eligible,
-			vs.has_voted,
+			COALESCE(vs.is_eligible, true) as is_eligible,
+			COALESCE(vs.has_voted, false) as has_voted,
 			vs.voted_at,
-			vs.voting_method,
-			v.voting_method,
+			vs.voting_method as status_voting_method,
+			v.voting_method as voter_voting_method,
 			vs.tps_id
 		FROM election_voters ev
 		INNER JOIN voters v ON v.id = ev.voter_id
-		INNER JOIN voter_status vs ON vs.voter_id = v.id AND vs.election_id = ev.election_id
+		LEFT JOIN voter_status vs ON vs.voter_id = v.id AND vs.election_id = ev.election_id
 		LEFT JOIN user_accounts ua ON ua.voter_id = v.id
 		WHERE ev.id = $1 AND ev.election_id = $2
 	`
 
 	var item VoterWithStatusDTO
 	var semester string
-	var voterType string // Changed from *string to string
+	var voterType string
 	var statusMethod *string
 	var voterMethod *string
 
-	err := r.db.QueryRow(ctx, query, voterID, electionID).Scan(
+	err := r.db.QueryRow(ctx, query, electionVoterID, electionID).Scan(
 		&item.VoterID,
 		&item.NIM,
 		&item.Name,
@@ -495,34 +497,37 @@ func (r *pgxRepository) GetVoterByID(ctx context.Context, electionID int64, vote
 	item.Status.LastVoteChannel = item.Status.VotingMethod
 	item.Semester = strings.TrimSpace(semester)
 	item.ClassLabel = strings.TrimSpace(semester)
-	item.VoterType = voterType // Always set voter_type
+	item.VoterType = voterType
 
 	return &item, nil
 }
 
-func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, voterID int64, updates VoterUpdateDTO) error {
+// UpdateVoter updates voter details by election_voter_id (enrollment ID)
+func (r *pgxRepository) UpdateVoter(ctx context.Context, electionID int64, electionVoterID int64, updates VoterUpdateDTO) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	// Check if voter exists for this election
-	var exists bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM voter_status WHERE voter_id = $1 AND election_id = $2)`
-	if err := tx.QueryRow(ctx, checkQuery, voterID, electionID).Scan(&exists); err != nil {
-		return fmt.Errorf("check voter exists: %w", err)
-	}
-	if !exists {
-		return fmt.Errorf("voter not found in this election")
+	// Get voter_id from election_voters table using election_voter_id
+	var voterID int64
+	getVoterIDQuery := `SELECT voter_id FROM election_voters WHERE id = $1 AND election_id = $2`
+	if err := tx.QueryRow(ctx, getVoterIDQuery, electionVoterID, electionID).Scan(&voterID); err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("voter not found in this election")
+		}
+		return fmt.Errorf("get voter_id: %w", err)
 	}
 
-	// Check if voter has voted
+	// Check if voter has voted (handle case where voter_status doesn't exist)
 	var hasVoted bool
-	checkVotedQuery := `SELECT has_voted FROM voter_status WHERE voter_id = $1 AND election_id = $2`
-	if err := tx.QueryRow(ctx, checkVotedQuery, voterID, electionID).Scan(&hasVoted); err != nil {
+	checkVotedQuery := `SELECT COALESCE(has_voted, false) FROM voter_status WHERE voter_id = $1 AND election_id = $2`
+	err = tx.QueryRow(ctx, checkVotedQuery, voterID, electionID).Scan(&hasVoted)
+	if err != nil && err != pgx.ErrNoRows {
 		return fmt.Errorf("check voter status: %w", err)
 	}
+	// If voter_status doesn't exist, hasVoted defaults to false
 
 	// If voter has voted, only allow voter_type and voting_method updates
 	if hasVoted {

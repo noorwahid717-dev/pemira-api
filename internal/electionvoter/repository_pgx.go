@@ -294,12 +294,13 @@ func (r *pgRepository) saveVoterRecord(
 			study_program_code = $8,
 			study_program_name = $9,
 			cohort_year = $10,
-			academic_status = $11,
-			voter_type = $12,
-			student_id = $13,
-			lecturer_id = $14,
-			staff_id = $15,
-			voting_method = $16,
+			semester = $11,
+			academic_status = $12,
+			voter_type = $13,
+			student_id = $14,
+			lecturer_id = $15,
+			staff_id = $16,
+			voting_method = $17,
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING id;
@@ -317,6 +318,7 @@ func (r *pgRepository) saveVoterRecord(
 			in.StudyProgramCode,
 			in.StudyProgramName,
 			in.CohortYear,
+			in.Semester,
 			status,
 			voterType,
 			identity.StudentID,
@@ -334,16 +336,16 @@ func (r *pgRepository) saveVoterRecord(
 		nim, name, email, phone,
 		faculty_code, faculty_name,
 		study_program_code, study_program_name,
-		cohort_year, academic_status,
+		cohort_year, semester, academic_status,
 		voter_type, student_id, lecturer_id, staff_id,
 		voting_method, created_at, updated_at
 	) VALUES (
 		$1, $2, $3, $4,
 		$5, $6,
 		$7, $8,
-		$9, $10,
-		$11, $12, $13, $14,
-		$15, NOW(), NOW()
+		$9, $10, $11,
+		$12, $13, $14, $15,
+		$16, NOW(), NOW()
 	)
 	RETURNING id;
 	`
@@ -359,6 +361,7 @@ func (r *pgRepository) saveVoterRecord(
 		in.StudyProgramCode,
 		in.StudyProgramName,
 		in.CohortYear,
+		in.Semester,
 		status,
 		voterType,
 		identity.StudentID,
@@ -548,7 +551,15 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			v.voter_type, v.name, v.email, 
 			v.faculty_code, v.faculty_name,
 			v.study_program_code, v.study_program_name,
-			v.cohort_year, v.academic_status,
+			v.cohort_year,
+			COALESCE(v.semester, 
+				CASE 
+					WHEN v.cohort_year IS NOT NULL AND v.voter_type = 'STUDENT' 
+					THEN (EXTRACT(YEAR FROM CURRENT_DATE)::int - v.cohort_year) * 2 + 1
+					ELSE NULL
+				END
+			) AS semester,
+			v.academic_status,
 			vs.has_voted,
 			ua.last_login_at
 		FROM election_voters ev
@@ -575,6 +586,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		var studyProgram sql.NullString
 		var studyProgramName sql.NullString
 		var cohortYear sql.NullInt32
+		var semester sql.NullInt32
 		var academicStatus sql.NullString
 		var hasVoted sql.NullBool
 		var lastLoginAt sql.NullTime
@@ -598,6 +610,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 			&studyProgram,
 			&studyProgramName,
 			&cohortYear,
+			&semester,
 			&academicStatus,
 			&hasVoted,
 			&lastLoginAt,
@@ -611,6 +624,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 		item.StudyProgram = nullableStringPtr(studyProgram)
 		item.StudyProgramName = nullableStringPtr(studyProgramName)
 		item.CohortYear = nullableIntPtr(cohortYear)
+		item.Semester = nullableIntPtr(semester)
 		item.AcademicStatus = nullableStringPtr(academicStatus)
 		item.HasVoted = nullableBoolPtr(hasVoted)
 		item.LastLoginAt = nullableTimePtr(lastLoginAt)
@@ -625,6 +639,7 @@ func (r *pgRepository) List(ctx context.Context, electionID int64, filter ListFi
 }
 
 func (r *pgRepository) UpdateEnrollment(ctx context.Context, electionID int64, enrollmentID int64, in UpdateInput) (*ElectionVoter, error) {
+	// First, update election_voters table
 	setParts := []string{}
 	args := []interface{}{enrollmentID, electionID}
 
@@ -642,7 +657,47 @@ func (r *pgRepository) UpdateEnrollment(ctx context.Context, electionID int64, e
 	}
 
 	if len(setParts) == 0 {
-		setParts = append(setParts, "updated_at = updated_at")
+		// If no fields to update, just touch updated_at
+		query := `
+			UPDATE election_voters
+			SET updated_at = NOW()
+			WHERE id = $1 AND election_id = $2
+			RETURNING id, election_id, voter_id, nim, status, voting_method, tps_id, checked_in_at, voted_at, updated_at;
+		`
+		
+		var ev ElectionVoter
+		err := r.db.QueryRow(ctx, query, enrollmentID, electionID).Scan(
+			&ev.ID,
+			&ev.ElectionID,
+			&ev.VoterID,
+			&ev.NIM,
+			&ev.Status,
+			&ev.VotingMethod,
+			&ev.TPSID,
+			&ev.CheckedInAt,
+			&ev.VotedAt,
+			&ev.UpdatedAt,
+		)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, shared.ErrNotFound
+			}
+			return nil, fmt.Errorf("update election_voter: %w", err)
+		}
+
+		// If semester is provided, update voters table
+		if in.Semester != nil {
+			_, err := r.db.Exec(ctx, `
+				UPDATE voters 
+				SET semester = $1, updated_at = NOW()
+				WHERE id = $2
+			`, *in.Semester, ev.VoterID)
+			if err != nil {
+				return nil, fmt.Errorf("update voter semester: %w", err)
+			}
+		}
+
+		return &ev, nil
 	}
 
 	query := fmt.Sprintf(`
@@ -670,6 +725,18 @@ func (r *pgRepository) UpdateEnrollment(ctx context.Context, electionID int64, e
 			return nil, shared.ErrNotFound
 		}
 		return nil, fmt.Errorf("update election_voter: %w", err)
+	}
+
+	// If semester is provided, update voters table
+	if in.Semester != nil {
+		_, err := r.db.Exec(ctx, `
+			UPDATE voters 
+			SET semester = $1, updated_at = NOW()
+			WHERE id = $2
+		`, *in.Semester, ev.VoterID)
+		if err != nil {
+			return nil, fmt.Errorf("update voter semester: %w", err)
+		}
 	}
 
 	return &ev, nil

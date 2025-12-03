@@ -37,6 +37,7 @@ type ElectionVoter struct {
 	StudyProgram    *string    `json:"study_program_code,omitempty"`
 	StudyProgramName *string   `json:"study_program_name,omitempty"`
 	CohortYear      *int       `json:"cohort_year,omitempty"`
+	Semester        *int       `json:"semester,omitempty"`
 	AcademicStatus  *string    `json:"academic_status,omitempty"`
 	HasVoted        *bool      `json:"has_voted,omitempty"`
 	LastLoginAt     *time.Time `json:"last_login_at,omitempty"`
@@ -58,6 +59,7 @@ type UpsertAndEnrollInput struct {
 	StudyProgramCode       *string `json:"study_program_code,omitempty"`
 	StudyProgramName       *string `json:"study_program_name,omitempty"`
 	CohortYear             *int    `json:"cohort_year,omitempty"`
+	Semester               *int    `json:"semester,omitempty"`
 	AcademicStatus         *string `json:"academic_status,omitempty"`
 	LecturerID             *int64  `json:"lecturer_id,omitempty"`
 	StaffID                *int64  `json:"staff_id,omitempty"`
@@ -92,6 +94,7 @@ type UpdateInput struct {
 	Status       *string `json:"status,omitempty"`
 	VotingMethod *string `json:"voting_method,omitempty"`
 	TPSID        *int64  `json:"tps_id,omitempty"`
+	Semester     *int    `json:"semester,omitempty"`
 }
 
 type SelfRegisterInput struct {
