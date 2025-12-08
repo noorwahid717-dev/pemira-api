@@ -462,8 +462,8 @@ func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration)
 	}
 	
 	query := `
-		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, class_label, academic_status, voter_type)
-		VALUES ($1, $2, $3, $4, $5, NULL, $6, 'ACTIVE', $7)
+		INSERT INTO voters (nim, name, email, faculty_name, study_program_name, cohort_year, class_label, academic_status, voter_type, semester)
+		VALUES ($1, $2, $3, $4, $5, NULL, $6, 'ACTIVE', $7, $8)
 		RETURNING id
 	`
 
@@ -472,6 +472,15 @@ func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration)
 	if classLabel == "" {
 		classLabel = "Semester tidak diisi"
 	}
+	
+	// Convert semester string to integer
+	var semesterInt *int
+	if voter.Semester != "" && voterType == "STUDENT" {
+		if val := parseSemester(voter.Semester); val > 0 {
+			semesterInt = &val
+		}
+	}
+	
 	if err := r.db.QueryRow(ctx, query,
 		voter.NIM,
 		voter.Name,
@@ -480,6 +489,7 @@ func (r *PgRepository) CreateVoter(ctx context.Context, voter VoterRegistration)
 		voter.StudyProgramName,
 		classLabel,
 		voterType,
+		semesterInt,
 	).Scan(&id); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "ux_voters_nim" {
@@ -652,4 +662,18 @@ func (r *PgRepository) EnrollVoterToElection(ctx context.Context, electionID, vo
 	`
 	_, err := r.db.Exec(ctx, query, electionID, voterID, nim, votingMethod)
 	return err
+}
+
+// parseSemester converts semester string to integer
+func parseSemester(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	var val int
+	_, err := fmt.Sscanf(s, "%d", &val)
+	if err != nil || val < 1 || val > 20 {
+		return 0
+	}
+	return val
 }
