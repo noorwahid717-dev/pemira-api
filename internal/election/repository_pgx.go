@@ -44,7 +44,7 @@ SELECT
     tps_enabled,
     created_at,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE status IN ('REGISTRATION', 'CAMPAIGN', 'VOTING_OPEN')
 ORDER BY 
     CASE status
@@ -94,7 +94,7 @@ SELECT
     tps_enabled,
     created_at,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE status IN ('REGISTRATION', 'CAMPAIGN')
 ORDER BY 
     CASE status
@@ -143,7 +143,7 @@ SELECT
     tps_enabled,
     created_at,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE id = $1
 `
 	var e Election
@@ -214,7 +214,7 @@ SELECT
     tps_enabled,
     created_at,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE status NOT IN ('ARCHIVED')
 ORDER BY year DESC, id DESC
 LIMIT 10
@@ -268,7 +268,7 @@ SELECT
     tps_enabled,
     created_at,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE id = $1
 `
 	var e Election
@@ -313,7 +313,7 @@ SELECT
     vs.online_allowed,
     vs.tps_allowed
 FROM voter_status vs
-JOIN elections e
+JOIN myschema.elections e
   ON e.id = vs.election_id
 WHERE vs.election_id = $1
   AND vs.voter_id = $2
