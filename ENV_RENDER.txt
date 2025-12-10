@@ -1,0 +1,23 @@
+COPY PASTE INI DI RENDER ENVIRONMENT VARIABLES:
+
+APP_ENV=production
+
+DATABASE_URL=postgresql://postgres.xqzfrodnznhjstfstvyz:AZcIF926bLLeeVRQ@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
+
+JWT_SECRET=a425c8bf79a9857730f5bfa611cce3c0eb6f1f6d08f6636e3c49eb7b7238d993
+
+JWT_EXPIRATION=24h
+
+HTTP_PORT=8080
+
+LOG_LEVEL=info
+
+CORS_ALLOWED_ORIGINS=https://www.pemira.online,https://pemira.online,https://pemira-mu.vercel.app
+
+SUPABASE_URL=https://xqzfrodnznhjstfstvyz.supabase.co
+
+SUPABASE_SECRET_KEY=sb_secret_1iAM9xFu0EzeU2UlzEnWuA_-gfUSxWE
+
+SUPABASE_MEDIA_BUCKET=pemira
+
+SUPABASE_BRANDING_BUCKET=pemira

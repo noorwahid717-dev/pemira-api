@@ -589,16 +589,16 @@ func (r *PgAdminRepository) GetSummary(ctx context.Context, id int64) (*Election
 SELECT
     e.status,
     e.current_phase,
-    (SELECT COUNT(*) FROM candidates c WHERE c.election_id = $1) AS total_candidates,
-    (SELECT COUNT(*) FROM candidates c WHERE c.election_id = $1 AND c.status = 'APPROVED') AS published_candidates,
-    (SELECT COUNT(*) FROM voter_status vs WHERE vs.election_id = $1) AS total_voters,
-    (SELECT COUNT(*) FROM voter_status vs WHERE vs.election_id = $1 AND vs.preferred_method = 'ONLINE') AS online_voters,
-    (SELECT COUNT(*) FROM voter_status vs WHERE vs.election_id = $1 AND vs.preferred_method = 'TPS') AS tps_voters,
-    (SELECT COUNT(*) FROM tps t WHERE t.election_id = $1) AS total_tps,
-    (SELECT COUNT(*) FROM tps t WHERE t.election_id = $1 AND t.status = 'ACTIVE') AS active_tps,
-    (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1) AS total_votes,
-    (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1 AND v.channel = 'ONLINE') AS online_votes,
-    (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1 AND v.channel = 'TPS') AS tps_votes
+    (SELECT COUNT(*) FROM myschema.candidates c WHERE c.election_id = $1) AS total_candidates,
+    (SELECT COUNT(*) FROM myschema.candidates c WHERE c.election_id = $1 AND c.status = 'APPROVED') AS published_candidates,
+    (SELECT COUNT(*) FROM myschema.voter_status vs WHERE vs.election_id = $1) AS total_voters,
+    (SELECT COUNT(*) FROM myschema.voter_status vs WHERE vs.election_id = $1 AND vs.preferred_method = 'ONLINE') AS online_voters,
+    (SELECT COUNT(*) FROM myschema.voter_status vs WHERE vs.election_id = $1 AND vs.preferred_method = 'TPS') AS tps_voters,
+    (SELECT COUNT(*) FROM myschema.tps t WHERE t.election_id = $1) AS total_tps,
+    (SELECT COUNT(*) FROM myschema.tps t WHERE t.election_id = $1 AND t.status = 'ACTIVE') AS active_tps,
+    (SELECT COUNT(*) FROM myschema.votes v WHERE v.election_id = $1) AS total_votes,
+    (SELECT COUNT(*) FROM myschema.votes v WHERE v.election_id = $1 AND v.channel = 'ONLINE') AS online_votes,
+    (SELECT COUNT(*) FROM myschema.votes v WHERE v.election_id = $1 AND v.channel = 'TPS') AS tps_votes
 FROM myschema.elections e
 WHERE e.id = $1
 `

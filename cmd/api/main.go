@@ -171,6 +171,17 @@ func main() {
 		})
 	})
 
+	// Leapcell health check endpoints
+	r.Get("/kaithhealthcheck", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	r.Get("/kaithheathcheck", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
 	r.Handle("/metrics", promhttp.Handler())
 
 	wsHandler := ws.NewHandler(hub)
@@ -406,7 +417,7 @@ func main() {
 				r.Post("/checkin/manual", tpsPanelHandler.ManualCheckin)
 				r.Get("/stats/timeline", tpsPanelHandler.Timeline)
 				r.Get("/logs", tpsPanelHandler.Logs)
-				
+
 				// Admin-only TPS management endpoints
 				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Get("/operators", tpsHandler.AdminListOperators)
 				r.With(httpMiddleware.AuthAdminOnly(jwtManager)).Post("/operators", tpsHandler.AdminCreateOperator)

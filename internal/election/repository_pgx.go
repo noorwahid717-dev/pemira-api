@@ -312,7 +312,7 @@ SELECT
     vs.preferred_method,
     vs.online_allowed,
     vs.tps_allowed
-FROM voter_status vs
+FROM myschema.voter_status vs
 JOIN myschema.elections e
   ON e.id = vs.election_id
 WHERE vs.election_id = $1
@@ -366,7 +366,7 @@ func (r *PgRepository) GetHistory(ctx context.Context, electionID, voterID, user
 	var method *string
 	err := r.db.QueryRow(ctx, `
 		SELECT created_at, updated_at, voted_at, voting_method
-		FROM voter_status
+		FROM myschema.voter_status
 		WHERE election_id = $1 AND voter_id = $2
 	`, electionID, voterID).Scan(&regCreatedAt, &regUpdatedAt, &votedAt, &method)
 	if err != nil {
@@ -395,7 +395,7 @@ func (r *PgRepository) GetHistory(ctx context.Context, electionID, voterID, user
 	// Check-ins
 	rows, err := r.db.Query(ctx, `
 		SELECT status, scan_at, voted_at, tps_id
-		FROM tps_checkins
+		FROM myschema.tps_checkins
 		WHERE election_id = $1 AND voter_id = $2
 		ORDER BY scan_at DESC
 		LIMIT 20
