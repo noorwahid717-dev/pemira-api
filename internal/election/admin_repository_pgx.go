@@ -168,7 +168,7 @@ func (r *PgAdminRepository) ListElections(ctx context.Context, filter AdminElect
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM elections %s", whereClause)
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM myschema.elections %s", whereClause)
 	var total int64
 	err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total)
 	if err != nil {
@@ -177,7 +177,7 @@ func (r *PgAdminRepository) ListElections(ctx context.Context, filter AdminElect
 
 	query := fmt.Sprintf(`
 SELECT %s
-FROM elections
+FROM myschema.elections
 %s
 ORDER BY year DESC, id DESC
 LIMIT $%d OFFSET $%d
@@ -210,7 +210,7 @@ LIMIT $%d OFFSET $%d
 func (r *PgAdminRepository) GetElectionByID(ctx context.Context, id int64) (*AdminElectionDTO, error) {
 	const base = `
 SELECT %s
-FROM elections
+FROM myschema.elections
 WHERE id = $1
 `
 	q := fmt.Sprintf(base, adminElectionColumns)
@@ -219,7 +219,7 @@ WHERE id = $1
 
 func (r *PgAdminRepository) CreateElection(ctx context.Context, req AdminElectionCreateRequest) (*AdminElectionDTO, error) {
 	q := fmt.Sprintf(`
-INSERT INTO elections (
+INSERT INTO myschema.elections (
     year,
     name,
     code,
@@ -354,7 +354,7 @@ func (r *PgAdminRepository) UpdateElection(ctx context.Context, id int64, req Ad
 	updates = append(updates, fmt.Sprintf("updated_at = NOW()"))
 
 	query := fmt.Sprintf(`
-UPDATE elections
+UPDATE myschema.elections
 SET %s
 WHERE id = $%d
 RETURNING %s
@@ -373,7 +373,7 @@ func (r *PgAdminRepository) SetVotingStatus(
 	votingStartAt, votingEndAt *time.Time,
 ) (*AdminElectionDTO, error) {
 	const q = `
-UPDATE elections
+UPDATE myschema.elections
 SET
     status = $2,
     current_phase = COALESCE($3, current_phase),
@@ -434,7 +434,7 @@ func (r *PgAdminRepository) UpdateGeneralInfo(ctx context.Context, id int64, req
 
 	updates = append(updates, "updated_at = NOW()")
 	query := fmt.Sprintf(`
-UPDATE elections
+UPDATE myschema.elections
 SET %s
 WHERE id = $%d
 RETURNING %s
@@ -473,7 +473,7 @@ func (r *PgAdminRepository) UpdatePhases(ctx context.Context, id int64, phases [
 
 	updates = append(updates, "updated_at = NOW()")
 	query := fmt.Sprintf(`
-UPDATE elections
+UPDATE myschema.elections
 SET %s
 WHERE id = $%d
 RETURNING %s
@@ -494,7 +494,7 @@ SELECT
     tps_require_ballot_qr,
     tps_max,
     updated_at
-FROM elections
+FROM myschema.elections
 WHERE id = $1
 `
 
@@ -521,7 +521,7 @@ WHERE id = $1
 
 func (r *PgAdminRepository) UpdateModeSettings(ctx context.Context, id int64, req ModeSettingsRequest) (*ModeSettingsDTO, error) {
 	const q = `
-UPDATE elections
+UPDATE myschema.elections
 SET
     online_enabled = COALESCE($2, online_enabled),
     tps_enabled = COALESCE($3, tps_enabled),
@@ -599,7 +599,7 @@ SELECT
     (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1) AS total_votes,
     (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1 AND v.channel = 'ONLINE') AS online_votes,
     (SELECT COUNT(*) FROM votes v WHERE v.election_id = $1 AND v.channel = 'TPS') AS tps_votes
-FROM elections e
+FROM myschema.elections e
 WHERE e.id = $1
 `
 
